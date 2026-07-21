@@ -176,6 +176,8 @@ void SetCurrentThreadName(const char* name)
   pthread_setname_np(pthread_self(), "%s", const_cast<char*>(name));
 #elif defined __HAIKU__
   rename_thread(find_thread(nullptr), name);
+#elif defined(__SWITCH__)
+  // Horizon threads carry no name the kernel or a debugger can see.
 #else
   // linux doesn't allow to set more than 16 bytes, including \0.
   pthread_setname_np(pthread_self(), std::string(name).substr(0, 15).c_str());
@@ -194,7 +196,12 @@ std::tuple<void*, size_t> GetCurrentThreadStack()
 
   pthread_t self = pthread_self();
 
-#ifdef __APPLE__
+#ifdef __SWITCH__
+  // libnx exposes no way to query the running thread's stack, so this optimization is unavailable.
+  (void)self;
+  stack_addr = nullptr;
+  stack_size = 0;
+#elif defined(__APPLE__)
   stack_size = pthread_get_stacksize_np(self);
   stack_addr = reinterpret_cast<u8*>(pthread_get_stackaddr_np(self)) - stack_size;
 #elif defined __OpenBSD__

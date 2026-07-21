@@ -42,9 +42,14 @@
 
 #else
 #include <arpa/inet.h>
+#ifndef __SWITCH__
 #include <ifaddrs.h>
+#endif
 #include <netinet/in.h>
+#ifndef __SWITCH__
+// The emulated Wii is handed the default public DNS below.
 #include <resolv.h>
+#endif
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
@@ -390,6 +395,8 @@ static std::optional<DefaultInterface> GetSystemDefaultInterface()
     routing_table = {{0, 0, 0, gateway}};
   if (addr || netmask || gateway)
     return DefaultInterface{addr, netmask, gateway, routing_table};
+#elif defined(__SWITCH__)
+// Horizon has no getifaddrs.
 #else
   // Assume that the address that is used to access the Internet corresponds
   // to the default interface.

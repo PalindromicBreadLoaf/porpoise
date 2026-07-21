@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdlib>
 
+#include "Common/Align.h"
 #include "Common/CommonFuncs.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
@@ -13,6 +14,9 @@
 #ifdef _WIN32
 #include <windows.h>
 #include "Common/StringUtil.h"
+#elif defined(__SWITCH__)
+#include <stdio.h>
+#include <switch.h>
 #else
 #include <stdio.h>
 #include <sys/mman.h>
@@ -30,6 +34,10 @@
 
 namespace Common
 {
+#ifdef __SWITCH__
+constexpr size_t PAGE_SIZE = 0x1000;
+#endif
+
 // This is purposely not a full wrapper for virtualalloc/mmap, but it
 // provides exactly the primitive operations that Dolphin needs.
 
@@ -37,6 +45,12 @@ void* AllocateExecutableMemory(size_t size)
 {
 #if defined(_WIN32)
   void* ptr = VirtualAlloc(nullptr, size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+#elif defined(__SWITCH__)
+  // Horizon enforces W^X.
+  // Executable memory comes from libnx jitCreate as a writable alias plus a
+  // separate executable view, which the emitters do not yet know how to target.
+  // TODO: have emitters account for this.
+  void* ptr = nullptr;
 #else
   int map_flags = MAP_ANON | MAP_PRIVATE;
 #if defined(__APPLE__)
@@ -124,6 +138,8 @@ void* AllocateMemoryPages(size_t size)
 {
 #ifdef _WIN32
   void* ptr = VirtualAlloc(nullptr, size, MEM_COMMIT, PAGE_READWRITE);
+#elif defined(__SWITCH__)
+  void* ptr = std::aligned_alloc(PAGE_SIZE, AlignUp(size, PAGE_SIZE));
 #else
   void* ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
 
@@ -141,6 +157,9 @@ void* AllocateAlignedMemory(size_t size, size_t alignment)
 {
 #ifdef _WIN32
   void* ptr = _aligned_malloc(size, alignment);
+#elif defined(__SWITCH__)
+  // newlib has no posix_memalign.
+  void* ptr = std::aligned_alloc(alignment, AlignUp(size, alignment));
 #else
   void* ptr = nullptr;
   if (posix_memalign(&ptr, alignment, size) != 0)
@@ -163,6 +182,8 @@ bool FreeMemoryPages(void* ptr, size_t size)
       PanicAlertFmt("FreeMemoryPages failed!\nVirtualFree: {}", GetLastErrorString());
       return false;
     }
+#elif defined(__SWITCH__)
+    std::free(ptr);
 #else
     if (munmap(ptr, size) != 0)
     {
@@ -195,6 +216,8 @@ bool ReadProtectMemory(void* ptr, size_t size)
     PanicAlertFmt("ReadProtectMemory failed!\nVirtualProtect: {}", GetLastErrorString());
     return false;
   }
+#elif defined(__SWITCH__)
+  // Guard pages simply are not enforced here.
 #else
   if (mprotect(ptr, size, PROT_NONE) != 0)
   {
@@ -214,6 +237,8 @@ bool WriteProtectMemory(void* ptr, size_t size, bool allowExecute)
     PanicAlertFmt("WriteProtectMemory failed!\nVirtualProtect: {}", GetLastErrorString());
     return false;
   }
+#elif defined(__SWITCH__)
+  // See ReadProtectMemory().
 #elif !(defined(_M_ARM_64) && defined(__APPLE__))
   // MacOS 11.2 on ARM does not allow for changing the access permissions of pages
   // that were marked executable, instead it uses the protections offered by MAP_JIT
@@ -236,6 +261,8 @@ bool UnWriteProtectMemory(void* ptr, size_t size, bool allowExecute)
     PanicAlertFmt("UnWriteProtectMemory failed!\nVirtualProtect: {}", GetLastErrorString());
     return false;
   }
+#elif defined(__SWITCH__)
+  // See ReadProtectMemory().
 #elif !(defined(_M_ARM_64) && defined(__APPLE__))
   // MacOS 11.2 on ARM does not allow for changing the access permissions of pages
   // that were marked executable, instead it uses the protections offered by MAP_JIT
@@ -271,6 +298,10 @@ size_t MemPhysical()
   size_t length = sizeof(size_t);
   sysctl(mib, 2, &physical_memory, &length, nullptr, 0);
   return physical_memory;
+#elif defined(__SWITCH__)
+  u64 total_memory = 0;
+  svcGetInfo(&total_memory, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
+  return total_memory;
 #elif defined __HAIKU__
   system_info sysinfo;
   get_system_info(&sysinfo);

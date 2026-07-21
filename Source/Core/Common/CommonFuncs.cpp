@@ -33,7 +33,7 @@ constexpr size_t BUFFER_SIZE = 256;
 const char* StrErrorWrapper(int error, char* buffer, std::size_t length)
 {
   // We check defines in order to figure out which variant is in use.
-#if (defined(__GLIBC__) || __ANDROID_API__ >= 23) &&                                               \
+#if (defined(__GLIBC__) || defined(__SWITCH__) || __ANDROID_API__ >= 23) &&                        \
     (_GNU_SOURCE || (_POSIX_C_SOURCE < 200112L && _XOPEN_SOURCE < 600))
   return strerror_r(error, buffer, length);
 #else

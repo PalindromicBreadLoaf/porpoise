@@ -27,6 +27,12 @@ if (CMAKE_VERSION VERSION_LESS "3.25" AND CMAKE_SYSTEM_NAME MATCHES "Linux")
   set(LINUX TRUE)
 endif()
 
+# Porpoise is the target for Nintendo Switch.
+if (CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch")
+  set(PORPOISE TRUE)
+  message(STATUS "Building for Nintendo Switch")
+endif()
+
 if (MSVC)
   set(CMAKE_C_STANDARD 99)
   set(CMAKE_CXX_STANDARD 23)
@@ -61,7 +67,7 @@ endif()
 # Name of the Dolphin distributor. If you redistribute Dolphin builds (forks,
 # unofficial builds) please consider identifying your distribution with a
 # unique name here.
-set(DISTRIBUTOR "None" CACHE STRING "Name of the distributor.")
+set(DISTRIBUTOR "Porpoise" CACHE STRING "PalindromicBreadLoaf")
 
 set(DOLPHIN_DEFAULT_UPDATE_TRACK "" CACHE STRING "Name of the default update track. If empty, disables auto-update.")
 
@@ -228,8 +234,11 @@ elseif(_ARCH_64 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x64|x86_64|amd64|AMD64")
 elseif(_ARCH_64 AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
   set(_M_ARM_64 1)
   add_definitions(-D_M_ARM_64=1)
-  # CRC instruction set is used in the CRC32 hash function
-  check_and_add_flag(HAVE_ARCH_ARMV8 -march=armv8-a+crc)
+  # CRC instruction set is used in the CRC32 hash function.
+  # The devkitPro Switch platform module already sets a richer -march, so use that.
+  if(NOT PORPOISE)
+    check_and_add_flag(HAVE_ARCH_ARMV8 -march=armv8-a+crc)
+  endif()
 else()
   message(FATAL_ERROR "You're building on an unsupported platform: "
       "'${CMAKE_SYSTEM_PROCESSOR}' with ${CMAKE_SIZEOF_VOID_P}-byte pointers."
@@ -462,6 +471,57 @@ if(ANDROID)
   SET(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 endif()
 
+if(PORPOISE)
+  # Version of the port itself, independent of the Dolphin version it tracks.
+  set(PORPOISE_VERSION "0.1.0")
+
+  # Everything Horizon cannot host.
+  set(ENABLE_QT 0)
+  set(ENABLE_NOGUI 0)
+  set(ENABLE_CLI_TOOL 0)
+  set(ENABLE_HEADLESS 0)
+  set(ENABLE_TESTS 0)
+
+  # Presents to a libnx nwindow directly.
+  set(ENABLE_X11 0)
+  set(ENABLE_EGL 0)
+
+  # Audio goes through a libnx sink.
+  set(ENABLE_ALSA 0)
+  set(ENABLE_PULSEAUDIO 0)
+  set(ENABLE_CUBEB 0)
+
+  # Input goes through Horizon HID.
+  set(ENABLE_SDL 0)
+
+  # Vulkan via NXVK.
+  set(ENABLE_VULKAN 0)
+
+  set(ENABLE_LLVM 0)
+  set(ENABLE_ANALYTICS 0)
+  set(ENABLE_AUTOUPDATE 0)
+  set(USE_DISCORD_PRESENCE 0)
+  set(USE_RETRO_ACHIEVEMENTS 0)
+  set(USE_UPNP 0)
+  set(ENCODE_FRAMEDUMPS 0)
+  set(USE_MGBA 0)
+  set(DSPTOOL 0)
+
+  set(ENABLE_LTO 1)
+
+  # Always build what we vendor.
+  set(USE_SYSTEM_LIBS OFF)
+
+  # newlib hides vasprintf and friends behind __GNU_VISIBLE.
+  add_definitions(-D_GNU_SOURCE)
+
+  # Search only the toolchain for libraries and includes
+  set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+  set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+  set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+  set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+endif()
+
 if(ENABLE_HEADLESS)
   message(STATUS "Enabling Headless! Disabling GUI.")
   set(ENABLE_QT 0)
@@ -490,11 +550,13 @@ endif()
 include(CheckLib)
 include(CheckCXXSourceRuns)
 
-set(OpenGL_GL_PREFERENCE GLVND CACHE STRING "Linux-only: if GLVND, use the vendor-neutral GL libraries (default). If LEGACY, use the legacy ones (might be necessary to have optirun/primusrun work)")
-set_property(CACHE OpenGL_GL_PREFERENCE PROPERTY STRINGS GLVND LEGACY)
-find_package(OpenGL)
-if (OPENGL_GL)
-  include_directories(${OPENGL_INCLUDE_DIR})
+if(NOT PORPOISE)
+  set(OpenGL_GL_PREFERENCE GLVND CACHE STRING "Linux-only: if GLVND, use the vendor-neutral GL libraries (default). If LEGACY, use the legacy ones (might be necessary to have optirun/primusrun work)")
+  set_property(CACHE OpenGL_GL_PREFERENCE PROPERTY STRINGS GLVND LEGACY)
+  find_package(OpenGL)
+  if (OPENGL_GL)
+    include_directories(${OPENGL_INCLUDE_DIR})
+  endif()
 endif()
 
 if(ENABLE_X11)
@@ -647,8 +709,8 @@ if(ENABLE_VULKAN)
   endif()
 endif()
 
-if(NOT (WIN32 AND _M_ARM_64))
-  # OpenGL is available on all platforms except windows-arm64
+if(NOT (WIN32 AND _M_ARM_64) AND NOT PORPOISE)
+  # OpenGL is available on all platforms except windows-arm64 and Switch (for now).
   add_definitions(-DHAS_OPENGL)
 endif()
 
@@ -701,7 +763,7 @@ if(ENABLE_CUBEB)
   add_definitions(-DHAVE_CUBEB)
 endif()
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT PORPOISE)
   dolphin_find_optional_system_library(LibUSB Externals/libusb)
   add_definitions(-D__LIBUSB__)
 endif()
@@ -719,9 +781,12 @@ endif()
 
 dolphin_find_optional_system_library(MBEDTLS Externals/mbedtls 2.28)
 
-dolphin_find_optional_system_library(CURL Externals/curl)
+if(NOT PORPOISE)
+  # Common/HttpRequest.cpp has a Horizon stub.
+  dolphin_find_optional_system_library(CURL Externals/curl)
+endif()
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT PORPOISE)
   dolphin_find_optional_system_library(HIDAPI Externals/hidapi)
 endif()
 
@@ -735,7 +800,9 @@ if(USE_MGBA)
   dolphin_find_optional_system_library(LIBMGBA Externals/mGBA 0.11)
 endif()
 
-find_package(SYSTEMD)
+if(NOT PORPOISE)
+  find_package(SYSTEMD)
+endif()
 if(SYSTEMD_FOUND)
   message(STATUS "libsystemd found, enabling traversal server watchdog support")
   add_definitions(-DHAVE_LIBSYSTEMD)
@@ -758,7 +825,10 @@ if (USE_RETRO_ACHIEVEMENTS)
   add_subdirectory(Externals/rcheevos)
 endif()
 
-add_subdirectory(Externals/watcher)
+if(NOT PORPOISE)
+  # wtr::watcher has no Horizon backend.
+  add_subdirectory(Externals/watcher)
+endif()
 
 # Any other platform or BSD is currently unsupported by cpp-ipc
 if(WIN32 OR LINUX OR CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "QNX")

@@ -360,7 +360,7 @@ static void CpuThread(Core::System& system, const std::optional<std::string>& sa
   }
 
   {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__SWITCH__)
     std::string gdb_socket = Config::Get(Config::MAIN_GDB_SOCKET);
     if (!gdb_socket.empty() && !AchievementManager::GetInstance().IsHardcoreModeActive())
     {

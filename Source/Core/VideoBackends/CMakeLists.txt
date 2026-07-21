@@ -1,4 +1,6 @@
-add_subdirectory(OGL)
+if(NOT PORPOISE)
+  add_subdirectory(OGL)
+endif()
 add_subdirectory(Null)
 add_subdirectory(Software)
 

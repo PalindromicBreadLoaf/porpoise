@@ -17,7 +17,10 @@ enum class Signal
 };
 
 void Init(u32 port);
+#if !defined(_WIN32) && !defined(__SWITCH__)
+// Horizon and Windows have no UNIX domain sockets. Use TCP stub instead.
 void InitLocal(const char* socket);
+#endif
 void Deinit();
 bool IsActive();
 bool HasControl();

@@ -36,7 +36,10 @@ void IniFile::ParseLine(std::string_view line, std::string* keyOut, std::string*
   }
 }
 
-const std::string& IniFile::NULL_STRING = "";
+// Bound to a named object rather than a "" temporary because devkitA64's GCC 16.1 ICEs building the
+// cleanup for a temporary lifetime-extended by a static reference member.
+static const std::string s_null_string;
+const std::string& IniFile::NULL_STRING = s_null_string;
 
 IniFile::Section::Section() = default;
 

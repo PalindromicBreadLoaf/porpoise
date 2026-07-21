@@ -148,6 +148,9 @@ private:
 
   vm_address_t m_region_address = 0;
   vm_size_t m_region_size = 0;
+#elif defined(__SWITCH__)
+  u8* m_shm_segment = nullptr;
+  std::size_t m_shm_segment_size = 0;
 #else
   int m_shm_fd = 0;
   void* m_reserved_region = nullptr;

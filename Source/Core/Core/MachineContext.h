@@ -136,6 +136,21 @@ typedef mcontext_t SContext;
 #else
 #error No context definition for architecture
 #endif
+#elif defined(__SWITCH__)
+#include <switch.h>
+// libnx's BIT(n) macro collides with Arm64Emitter's BIT instruction emitter.
+#undef BIT
+typedef ThreadExceptionDump SContext;
+#if _M_ARM_64
+// cpu_gprs, fp, lr, sp and pc are consecutive CpuRegisters in ThreadExceptionDump, so indices 29
+// and 30 land on fp and lr exactly as expected.
+#define CTX_REG(n) cpu_gprs[n].x
+#define CTX_LR lr.x
+#define CTX_SP sp.x
+#define CTX_PC pc.x
+#else
+#error No context definition for architecture
+#endif
 #elif defined(__OpenBSD__)
 #include <signal.h>
 typedef ucontext_t SContext;

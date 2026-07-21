@@ -680,7 +680,6 @@ PUBLIC
   pugixml
   sfml-network
   videonull
-  videoogl
   videosoftware
 
 PRIVATE
@@ -731,6 +730,10 @@ if(TARGET LibUSB::LibUSB)
     IOS/USB/Bluetooth/RealtekFirmwareLoader.cpp
     IOS/USB/Bluetooth/RealtekFirmwareLoader.h
   )
+endif()
+
+if(NOT PORPOISE)
+  target_link_libraries(core PUBLIC videoogl)
 endif()
 
 if(ENABLE_VULKAN)

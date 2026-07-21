@@ -246,3 +246,16 @@ add_custom_target(${lib_target} DEPENDS ${mbedcrypto_target} ${mbedx509_target} 
 if(USE_STATIC_MBEDTLS_LIBRARY AND USE_SHARED_MBEDTLS_LIBRARY)
     add_dependencies(${lib_target} ${mbedcrypto_static_target} ${mbedx509_static_target} ${mbedtls_static_target})
 endif()
+
+# Porpoise: reconcile mbedtls with Horizon through a user config file and feed its entropy pool via libnx.
+if(PORPOISE)
+    foreach(target IN LISTS target_libraries)
+        target_compile_definitions(${target} PUBLIC MBEDTLS_USER_CONFIG_FILE=<horizon_config.h>)
+        target_include_directories(${target} PUBLIC ${MBEDTLS_DIR})
+        # net_sockets.c refuses to build unless it recognises the OS, but the code it guards is
+        # plain POSIX that libnx satisfies.
+        # This must be kept private so that no other module uses this definition.
+        target_compile_definitions(${target} PRIVATE __unix__=1)
+    endforeach()
+    target_sources(${mbedcrypto_static_target} PRIVATE ${MBEDTLS_DIR}/horizon_entropy.c)
+endif()

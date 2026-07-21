@@ -18,8 +18,13 @@ typedef SSIZE_T ssize_t;
 #include <netinet/in.h>
 #include <sys/select.h>
 #include <sys/socket.h>
-#include <sys/un.h>
 #include <unistd.h>
+#ifndef __SWITCH__
+#include <sys/un.h>
+#else
+// libnx declares the byte order helpers here rather than in <netinet/in.h>.
+#include <arpa/inet.h>
+#endif
 #endif
 
 #include "Common/Assert.h"
@@ -1047,7 +1052,7 @@ void ProcessCommands(bool loop_until_continue)
 static void InitGeneric(int domain, const sockaddr* server_addr, socklen_t server_addrlen,
                         sockaddr* client_addr, socklen_t* client_addrlen);
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__SWITCH__)
 void InitLocal(const char* socket)
 {
   unlink(socket);

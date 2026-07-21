@@ -7,6 +7,10 @@ add_subdirectory(UICommon)
 add_subdirectory(VideoCommon)
 add_subdirectory(VideoBackends)
 
+if(PORPOISE)
+  add_subdirectory(DolphinSwitch)
+endif()
+
 if(ENABLE_NOGUI)
   add_subdirectory(DolphinNoGUI)
 endif()

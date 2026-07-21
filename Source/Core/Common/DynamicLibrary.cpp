@@ -9,7 +9,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#else
+#elif !defined(__SWITCH__)
 #include <dlfcn.h>
 #endif
 
@@ -81,6 +81,9 @@ bool DynamicLibrary::Open(const char* filename)
 {
 #ifdef _WIN32
   m_handle = reinterpret_cast<void*>(LoadLibraryA(filename));
+#elif defined(__SWITCH__)
+  // There is nothing to load at runtime.
+  m_handle = nullptr;
 #else
   m_handle = dlopen(filename, RTLD_NOW);
 #endif
@@ -94,7 +97,7 @@ void DynamicLibrary::Close()
 
 #ifdef _WIN32
   FreeLibrary(static_cast<HMODULE>(m_handle));
-#else
+#elif !defined(__SWITCH__)
   dlclose(m_handle);
 #endif
   m_handle = nullptr;
@@ -104,6 +107,8 @@ void* DynamicLibrary::GetSymbolAddress(const char* name) const
 {
 #ifdef _WIN32
   return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(m_handle), name));
+#elif defined(__SWITCH__)
+  return nullptr;
 #else
   return reinterpret_cast<void*>(dlsym(m_handle, name));
 #endif

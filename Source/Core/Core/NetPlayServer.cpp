@@ -76,7 +76,9 @@
 #define _BSD_SOURCE
 #include <bsd/ifaddrs.h>
 #elif !defined ANDROID
+#ifndef __SWITCH__
 #include <ifaddrs.h>
+#endif
 #endif
 #include <arpa/inet.h>
 #else
@@ -2378,6 +2380,8 @@ std::vector<std::pair<std::string, std::string>> NetPlayServer::GetInterfaceList
 #elif defined(ANDROID)
 // Android has no getifaddrs for some stupid reason.  If this
 // functionality ends up actually being used on Android, fix this.
+#elif defined(__SWITCH__)
+// Horizon has no getifaddrs either.
 #else
   ifaddrs* ifp = nullptr;
   char buf[512];

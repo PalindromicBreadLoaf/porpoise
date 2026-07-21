@@ -67,7 +67,6 @@ add_library(common
   FatFsUtil.h
   FileSearch.cpp
   FileSearch.h
-  FilesystemWatcher.cpp
   FilesystemWatcher.h
   FileUtil.cpp
   FileUtil.h
@@ -85,7 +84,6 @@ add_library(common
   HookableEvent.h
   HostDisassembler.cpp
   HostDisassembler.h
-  HttpRequest.cpp
   HttpRequest.h
   Image.cpp
   Image.h
@@ -187,12 +185,14 @@ PUBLIC
   sfml-network
 
 PRIVATE
-  CURL::libcurl
   FatFs
   spng::spng
-  watcher
   ${VTUNE_LIBRARIES}
 )
+
+if(NOT PORPOISE)
+  target_link_libraries(common PRIVATE CURL::libcurl watcher)
+endif()
 
 if ((DEFINED CMAKE_ANDROID_ARCH_ABI AND CMAKE_ANDROID_ARCH_ABI MATCHES "x86|x86_64") OR
     (NOT DEFINED CMAKE_ANDROID_ARCH_ABI AND _M_X86_64))
@@ -226,7 +226,25 @@ elseif(HAIKU)
   target_link_libraries(common PRIVATE be GL)
 endif()
 
-if(ANDROID)
+# Horizon has neither a inotify nor curl.
+if(PORPOISE)
+  target_sources(common PRIVATE
+    FilesystemWatcherHorizon.cpp
+    HttpRequestHorizon.cpp
+  )
+else()
+  target_sources(common PRIVATE
+    FilesystemWatcher.cpp
+    HttpRequest.cpp
+  )
+endif()
+
+if(PORPOISE)
+  target_sources(common PRIVATE
+    Logging/ConsoleListenerNix.cpp
+    MemArenaHorizon.cpp
+  )
+elseif(ANDROID)
   target_sources(common PRIVATE
     Logging/ConsoleListenerDroid.cpp
     MemArenaAndroid.cpp
@@ -279,14 +297,16 @@ else()
 endif()
 
 # OpenGL Interface
-target_sources(common PRIVATE
-  GL/GLContext.cpp
-  GL/GLContext.h
-  GL/GLUtil.cpp
-  GL/GLUtil.h
-  GL/GLExtensions/GLExtensions.cpp
-  GL/GLExtensions/GLExtensions.h
-)
+if(NOT PORPOISE)
+  target_sources(common PRIVATE
+    GL/GLContext.cpp
+    GL/GLContext.h
+    GL/GLUtil.cpp
+    GL/GLUtil.h
+    GL/GLExtensions/GLExtensions.cpp
+    GL/GLExtensions/GLExtensions.h
+  )
+endif()
 
 if(ENABLE_EGL AND EGL_FOUND)
   target_sources(common PRIVATE
