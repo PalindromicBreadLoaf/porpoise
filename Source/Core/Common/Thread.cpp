@@ -3,6 +3,8 @@
 
 #include "Common/Thread.h"
 
+#include <bit>
+
 #ifdef _WIN32
 #include <windows.h>
 #include <processthreadsapi.h>
@@ -19,6 +21,8 @@
 #include <sched.h>
 #elif defined __HAIKU__
 #include <OS.h>
+#elif defined(__SWITCH__)
+#include <switch.h>
 #endif
 
 #ifdef USE_VTUNE
@@ -119,9 +123,25 @@ void SetCurrentThreadName(const char* name)
 
 #else  // !WIN32, so must be POSIX threads
 
+#ifdef __SWITCH__
+
+u32 GetAvailableCoreMask()
+{
+  u64 core_mask = 0;
+  if (R_FAILED(svcGetInfo(&core_mask, InfoType_CoreMask, CUR_PROCESS_HANDLE, 0)))
+    return 0;
+  return static_cast<u32>(core_mask);
+}
+
+#endif
+
 void SetThreadAffinity(std::thread::native_handle_type thread, u32 mask)
 {
-#ifdef __APPLE__
+#ifdef __SWITCH__
+  // Threads pin themselves via SetCurrentThreadAffinity.
+  (void)thread;
+  (void)mask;
+#elif defined(__APPLE__)
   thread_policy_set(pthread_mach_thread_np(thread), THREAD_AFFINITY_POLICY, (integer_t*)&mask, 1);
 #elif (defined __linux__ || defined BSD4_4 || defined __FreeBSD__ || defined __NetBSD__) &&        \
     !(defined ANDROID)
@@ -153,7 +173,16 @@ void SetThreadAffinity(std::thread::native_handle_type thread, u32 mask)
 
 void SetCurrentThreadAffinity(u32 mask)
 {
+#ifdef __SWITCH__
+  mask &= GetAvailableCoreMask();
+  if (mask == 0)
+    return;
+
+  const s32 preferred_core = std::countr_zero(mask);
+  svcSetThreadCoreMask(CUR_THREAD_HANDLE, preferred_core, mask);
+#else
   SetThreadAffinity(pthread_self(), mask);
+#endif
 }
 
 void SleepCurrentThread(int ms)

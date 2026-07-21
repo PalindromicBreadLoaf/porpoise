@@ -24,13 +24,28 @@
 namespace Common::Log
 {
 const Config::Info<bool> LOGGER_WRITE_TO_FILE{{Config::System::Logger, "Options", "WriteToFile"},
+#ifdef __SWITCH__
+                                              // Log to SD Card on Switch.
+                                              true};
+#else
                                               false};
+#endif
 const Config::Info<bool> LOGGER_WRITE_TO_CONSOLE{
     {Config::System::Logger, "Options", "WriteToConsole"}, true};
 const Config::Info<bool> LOGGER_WRITE_TO_WINDOW{
     {Config::System::Logger, "Options", "WriteToWindow"}, true};
 const Config::Info<LogLevel> LOGGER_VERBOSITY{{Config::System::Logger, "Options", "Verbosity"},
+#ifdef __SWITCH__
+                                              LogLevel::LWARNING};
+#else
                                               LogLevel::LNOTICE};
+#endif
+
+#ifdef __SWITCH__
+constexpr bool DEFAULT_LOG_TYPE_ENABLE = true;
+#else
+constexpr bool DEFAULT_LOG_TYPE_ENABLE = false;
+#endif
 
 class FileLogListener : public LogListener
 {
@@ -166,8 +181,8 @@ LogManager::LogManager()
 
   for (auto& container : m_log)
   {
-    container.m_enable = Config::Get(
-        Config::Info<bool>{{Config::System::Logger, "Logs", container.m_short_name}, false});
+    container.m_enable = Config::Get(Config::Info<bool>{
+        {Config::System::Logger, "Logs", container.m_short_name}, DEFAULT_LOG_TYPE_ENABLE});
   }
 
   m_path_cutoff_point = DeterminePathCutOffPoint();

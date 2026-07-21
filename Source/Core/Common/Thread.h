@@ -26,6 +26,11 @@ int CurrentThreadId();
 void SetThreadAffinity(std::thread::native_handle_type thread, u32 mask);
 void SetCurrentThreadAffinity(u32 mask);
 
+#ifdef __SWITCH__
+// The set of cores the process was granted. Core 3 is normally (always?) reserved for the system.
+u32 GetAvailableCoreMask();
+#endif
+
 void SleepCurrentThread(int ms);
 void SwitchCurrentThread();  // On Linux, this is equal to sleep 1ms
 

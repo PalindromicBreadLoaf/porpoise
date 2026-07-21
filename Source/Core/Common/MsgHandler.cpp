@@ -3,6 +3,7 @@
 
 #include "Common/MsgHandler.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 
@@ -35,6 +36,11 @@ bool DefaultMsgHandler(const char* caption, const char* text, bool yes_no, MsgTy
                              window_style | (yes_no ? MB_YESNO : MB_OK));
 #else
   fmt::print(stderr, "{}\n", text);
+
+#ifdef __SWITCH__
+  // Flush stderr before a crash.
+  std::fflush(stderr);
+#endif
 
   // Return no to any question (which will in general crash the emulator)
   return false;

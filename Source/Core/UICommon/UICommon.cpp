@@ -311,7 +311,10 @@ void SetUserDirectory(std::string custom_path)
   }
 
   std::string user_path;
-#ifdef _WIN32
+#ifdef __SWITCH__
+  // Switch only knows of the SD card.
+  user_path = NORMAL_USER_DIR DIR_SEP;
+#elif defined(_WIN32)
   // Detect where the User directory is. There are five different cases
   // (on top of the command line flag, which overrides all this):
   // 1. GetExeDirectory()\portable.txt exists

@@ -280,8 +280,23 @@ bool DeleteDir(const std::string& filename, IfAbsentBehavior behavior)
 bool Rename(const std::string& srcFilename, const std::string& destFilename)
 {
   DEBUG_LOG_FMT(COMMON, "{}: {} --> {}", __func__, srcFilename, destFilename);
+  const auto src_path = StringToPath(srcFilename);
+  const auto dest_path = StringToPath(destFilename);
   std::error_code error;
-  std::filesystem::rename(StringToPath(srcFilename), StringToPath(destFilename), error);
+  fs::rename(src_path, dest_path, error);
+
+#ifdef __SWITCH__
+  // Horizon fails with EEXIST instead of replacing the destination, which breaks every
+  // write-temp-then-rename instance. Instead we just overwrite and hope :)
+  std::error_code ignored;
+  if (error && fs::is_regular_file(src_path, ignored) && fs::is_regular_file(dest_path, ignored) &&
+      fs::remove(dest_path, ignored))
+  {
+    error.clear();
+    fs::rename(src_path, dest_path, error);
+  }
+#endif
+
   if (error)
   {
     ERROR_LOG_FMT(COMMON, "{} failed: {} --> {}: {}", __func__, srcFilename, destFilename,
@@ -317,6 +332,9 @@ bool RenameSync(const std::string& srcFilename, const std::string& destFilename)
       ERROR_LOG_FMT(COMMON, "{} sync failed on {}: {}", __func__, srcFilename, err);
     close(fd);
   }
+#elif defined(__SWITCH__)
+  // newlib has no dirname, and Horizon's filesystem exposes no directory handle to fsync anyway.
+  FSyncPath(srcFilename.c_str());
 #else
   char* path = strdup(srcFilename.c_str());
   FSyncPath(path);
@@ -763,6 +781,8 @@ static std::string CreateSysDirectoryPath()
 #define SYSDATA_DIR "Sys"
 #elif defined __APPLE__
 #define SYSDATA_DIR "Contents/Resources/Sys"
+#elif defined(__SWITCH__)
+#define SYSDATA_DIR "Sys"
 #else
 #ifdef DATA_DIR
 #define SYSDATA_DIR DATA_DIR "sys"
@@ -778,6 +798,10 @@ static std::string CreateSysDirectoryPath()
 #elif defined ANDROID
   const std::string sys_directory = s_android_sys_directory + DIR_SEP;
   ASSERT_MSG(COMMON, !s_android_sys_directory.empty(), "Sys directory has not been set");
+#elif defined(__SWITCH__)
+  // Shipped next to the user directory on the SD card rather than embedded in the NRO.
+  // TODO: package Data/Sys into the release zip.
+  const std::string sys_directory = NORMAL_USER_DIR DIR_SEP SYSDATA_DIR DIR_SEP;
 #else
   const std::string sys_directory = SYSDATA_DIR DIR_SEP;
 #endif

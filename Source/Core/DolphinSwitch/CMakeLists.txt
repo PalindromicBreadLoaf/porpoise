@@ -1,4 +1,5 @@
 add_executable(porpoise
+  CrashHandlerSwitch.cpp
   HostSwitch.cpp
   MainSwitch.cpp
 )
