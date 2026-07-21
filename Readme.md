@@ -54,10 +54,10 @@ The "Debug" solution configuration is significantly slower, more verbose and les
 
 ## Building for Linux and macOS
 
-Dolphin requires [CMake](https://cmake.org/) for systems other than Windows. 
+Dolphin requires [CMake](https://cmake.org/) for systems other than Windows.
 You need a recent version of GCC or Clang with decent c++20 support. CMake will
 inform you if your compiler is too old.
-Many libraries are bundled with Dolphin and used if they're not installed on 
+Many libraries are bundled with Dolphin and used if they're not installed on
 your system. CMake will inform you if a bundled library is used or if you need
 to install any missing packages yourself. You may refer to the [wiki](https://github.com/dolphin-emu/dolphin/wiki/Building-for-Linux) for more information.
 
@@ -68,7 +68,7 @@ git submodule update --init --recursive
 
 ### macOS Build Steps:
 
-A binary supporting a single architecture can be built using the following steps: 
+A binary supporting a single architecture can be built using the following steps:
 
 1. `mkdir build`
 2. `cd build`
@@ -86,8 +86,8 @@ application bundle using the following steps:
 4. Universal binaries will be available in the `universal` folder
 
 Doing this is more complex as it requires installation of library dependencies for both x64 and ARM (or universal library
-equivalents) and may require specifying additional arguments to point to relevant library locations. 
-Execute BuildMacOSUniversalBinary.py --help for more details.  
+equivalents) and may require specifying additional arguments to point to relevant library locations.
+Execute BuildMacOSUniversalBinary.py --help for more details.
 
 ### Linux Global Build Steps:
 
@@ -136,6 +136,27 @@ If using Android Studio, import the Gradle project located in `./Source/Android`
 Android apps are compiled using a build system called Gradle. Dolphin's native component,
 however, is compiled using CMake. The Gradle script will attempt to run a CMake build
 automatically while building the Java code.
+
+## Building for Nintendo Switch
+
+Requires [devkitPro](https://devkitpro.org/wiki/Getting_Started) with the `switch-dev` package
+group installed, and `$DEVKITPRO` set (`/opt/devkitpro` by default).
+
+Make sure to pull submodules before building:
+```shell
+git submodule update --init --recursive
+```
+
+```shell
+cmake -S . -B build/switch \
+    -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+cmake --build build/switch --target porpoise_nro -j$(nproc)
+```
+
+This produces `build/switch/Binaries/porpoise.nro`. Copy it to `/switch/porpoise/` on the SD
+card.
 
 ## Uninstalling
 
