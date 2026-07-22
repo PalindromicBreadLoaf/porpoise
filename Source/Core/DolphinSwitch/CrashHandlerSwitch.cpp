@@ -47,6 +47,17 @@ private:
   char m_buffer[256];
 };
 
+// A `brk` reaches the same handler as an actual fault, but Horizon reports it as an instruction
+// abort, which sends you looking for a bad jump that never happened for hours on end which ends up being
+// a huge waste of time and no I'm not salty.
+constexpr u32 ESR_EC_BRK_AARCH64 = 0x3C;
+constexpr u32 BRK_BUILTIN_TRAP = 1000;
+
+u32 EsrExceptionClass(u32 esr)
+{
+  return (esr >> 26) & 0x3F;
+}
+
 const char* DescribeError(u32 error_desc)
 {
   switch (error_desc)
@@ -71,16 +82,35 @@ const char* DescribeError(u32 error_desc)
 }
 }  // namespace
 
+// switch.ld places _start at 0, so its runtime address is the load base and subtracting it from
+// pc turns the dump into something addr2line can resolve against porpoise.elf.
+extern "C" void _start();
+
 alignas(16) u8 __nx_exception_stack[0x2000];
 u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
+
+extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx);
 
 extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx)
 {
   const int fd = open(CRASH_LOG_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0666);
   DumpWriter out(fd);
 
-  out.Printf("porpoise crashed: %s (error_desc 0x%x)\n", DescribeError(ctx->error_desc),
-             ctx->error_desc);
+  const bool is_brk = EsrExceptionClass(ctx->esr) == ESR_EC_BRK_AARCH64;
+  if (is_brk)
+  {
+    const u32 comment = ctx->esr & 0xFFFF;
+    out.Printf("porpoise stopped at brk #%u%s\n", comment,
+               comment == BRK_BUILTIN_TRAP ? " (__builtin_trap)" : "");
+    out.Printf("This is deliberate, not a bad jump. A failed ASSERT or Crash() leaves the "
+               "condition, file, line and function in the last lines of dolphin.log. If nothing "
+               "is there, the compiler emitted the trap itself and the pc below is the site.\n");
+  }
+  else
+  {
+    out.Printf("porpoise crashed: %s (error_desc 0x%x)\n", DescribeError(ctx->error_desc),
+               ctx->error_desc);
+  }
 
   if (!threadExceptionIsAArch64(ctx))
   {
@@ -92,22 +122,34 @@ extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx)
     out.Printf("sp  %016lx  fp  %016lx\n", ctx->sp.x, ctx->fp.x);
     out.Printf("far %016lx  esr %08x  pstate %08x\n", ctx->far.x, ctx->esr, ctx->pstate);
 
-    for (int i = 0; i < 29; i += 2)
-      out.Printf("x%-2d %016lx  x%-2d %016lx\n", i, ctx->cpu_gprs[i].x, i + 1,
-                 ctx->cpu_gprs[i + 1].x);
+    // cpu_gprs holds x0..x28, an odd count, so the last row has no partner to pair with.
+    constexpr int gpr_count = 29;
+    for (int i = 0; i < gpr_count; i += 2)
+    {
+      if (i + 1 < gpr_count)
+        out.Printf("x%-2d %016lx  x%-2d %016lx\n", i, ctx->cpu_gprs[i].x, i + 1,
+                   ctx->cpu_gprs[i + 1].x);
+      else
+        out.Printf("x%-2d %016lx\n", i, ctx->cpu_gprs[i].x);
+    }
   }
 
-  // The NRO is relocated at load, so the raw addresses above only become source lines once they are
-  // rebased. Subtracting this from pc/lr gives an offset into porpoise.elf.
-  u64 aslr_base = 0;
-  if (R_SUCCEEDED(svcGetInfo(&aslr_base, InfoType_AslrRegionAddress, CUR_PROCESS_HANDLE, 0)))
-    out.Printf("aslr base %016lx\n", aslr_base);
+  const u64 module_base = reinterpret_cast<u64>(&_start);
+  out.Printf("module base %016lx\n", module_base);
+  if (ctx->pc.x >= module_base)
+    out.Printf("pc +%lx  lr +%lx  (aarch64-none-elf-addr2line -e porpoise.elf)\n",
+               ctx->pc.x - module_base, ctx->lr.x - module_base);
+  else
+    out.Printf("pc is below the module base; the jump left our image.\n");
 
   if (fd >= 0)
   {
     (void)fsync(fd);
     (void)close(fd);
   }
+
+  // fsync only covers the handle above. Everything else must be flushed manually.
+  (void)fsdevCommitDevice("sdmc");
 
   // Returning from here resumes the faulting instruction and loops forever.
   // Instead, exit to prevent a hang.
