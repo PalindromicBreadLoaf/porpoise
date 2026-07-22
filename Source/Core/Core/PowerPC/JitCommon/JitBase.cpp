@@ -197,6 +197,10 @@ void JitBase::ProtectStack()
     return;
   }
 
+#ifdef __SWITCH__
+  // Horizon's page size is fixed.
+  constexpr long page_size = 0x1000;
+#else
   const long page_size = sysconf(_SC_PAGESIZE);
   if (page_size <= 0)
   {
@@ -204,6 +208,7 @@ void JitBase::ProtectStack()
     m_enable_blr_optimization = false;
     return;
   }
+#endif
 
   const uintptr_t stack_guard_addr = Common::AlignUp(stack_base_addr + GUARD_OFFSET, page_size);
   if (stack_guard_addr >= stack_middle_addr ||

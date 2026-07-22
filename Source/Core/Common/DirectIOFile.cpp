@@ -21,6 +21,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifdef __SWITCH__
+#include <mutex>
+#endif
+
 #ifdef ANDROID
 #include "jni/AndroidCommon/AndroidCommon.h"
 
@@ -214,10 +218,25 @@ static bool OverlappedTransfer(HANDLE handle, u64 offset, auto* data_ptr, u64 si
 }
 #endif
 
+#if defined(__SWITCH__)
+// newlib declares pread/pwrite but ships no implementation, so positional access has to be a seek followed by a transfer.
+static std::mutex s_positional_io_mutex;
+
+static bool SeekAndTransfer(int fd, u64 offset, auto&& transfer)
+{
+  const std::lock_guard guard(s_positional_io_mutex);
+  if (lseek(fd, off_t(offset), SEEK_SET) != off_t(offset))
+    return false;
+  return transfer();
+}
+#endif
+
 bool DirectIOFile::OffsetRead(u64 offset, u8* out_ptr, u64 size)
 {
 #if defined(_WIN32)
   return OverlappedTransfer<ReadFile>(m_handle, offset, out_ptr, size);
+#elif defined(__SWITCH__)
+  return SeekAndTransfer(m_fd, offset, [&] { return read(m_fd, out_ptr, size) == ssize_t(size); });
 #else
   return pread(m_fd, out_ptr, size, off_t(offset)) == ssize_t(size);
 #endif
@@ -227,6 +246,8 @@ bool DirectIOFile::OffsetWrite(u64 offset, const u8* in_ptr, u64 size)
 {
 #if defined(_WIN32)
   return OverlappedTransfer<WriteFile>(m_handle, offset, in_ptr, size);
+#elif defined(__SWITCH__)
+  return SeekAndTransfer(m_fd, offset, [&] { return write(m_fd, in_ptr, size) == ssize_t(size); });
 #else
   return pwrite(m_fd, in_ptr, size, off_t(offset)) == ssize_t(size);
 #endif

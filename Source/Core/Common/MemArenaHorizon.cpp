@@ -16,7 +16,7 @@ namespace Common
 {
 // Horizon exposes no primitive that maps one physical allocation into several address ranges from
 // user mode without going through svcMapMemory and the kernel's fixed alias region. Until that is
-// worked out (IMPLEMENTATION.md Phase 7.2), the "segment" is one flat allocation and every view is
+// worked out, the "segment" is one flat allocation and every view is
 // a slice of it. Guest memory mirrors are then not host-aliased, so all three fastmem entry points
 // below fail and Memmap falls back to MMU.cpp for every access.
 constexpr size_t HORIZON_PAGE_SIZE = 0x1000;

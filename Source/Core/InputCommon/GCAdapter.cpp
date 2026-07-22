@@ -1073,6 +1073,11 @@ bool IsDetected(const char** error_message)
   return false;
 #elif GCADAPTER_USE_ANDROID_IMPLEMENTATION
   return s_detected;
+#else
+  if (error_message)
+    *error_message = nullptr;
+
+  return false;
 #endif
 }
 

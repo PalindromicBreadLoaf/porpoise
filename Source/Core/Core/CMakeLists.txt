@@ -784,6 +784,11 @@ elseif(UNIX)
       HW/WiimoteReal/IOAndroid.h
     )
   endif()
+elseif(PORPOISE)
+  # Horizon has no TAP device, but CEXIETHERNET still constructs the interface.
+  target_sources(core PRIVATE
+    HW/EXI/BBA/TAP_Unix.cpp
+  )
 endif()
 
 # Bluez doesn't support all the communication modes on FreeBSD, so only using it on Linux
