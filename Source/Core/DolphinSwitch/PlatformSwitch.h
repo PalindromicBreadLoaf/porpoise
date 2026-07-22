@@ -36,9 +36,11 @@ public:
 private:
   void UpdateRunningFlag();
   void PollHostInput();
+  void PollOperationMode();
 
   PadState& m_pad;
   NWindow* m_window = nullptr;
+  AppletOperationMode m_operation_mode{};
 
   Common::Flag m_running{true};
   Common::Flag m_shutdown_requested{false};

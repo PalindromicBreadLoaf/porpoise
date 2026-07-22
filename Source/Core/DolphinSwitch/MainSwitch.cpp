@@ -6,6 +6,9 @@
 #include <memory>
 #include <string>
 
+// struct in_addr for __nxlink_host.
+#include <netinet/in.h>
+
 #include <switch.h>
 
 #include "Common/CommonTypes.h"
@@ -32,8 +35,8 @@ std::unique_ptr<PlatformSwitch> g_platform;
 
 namespace
 {
-// Applet mode is granted neither JIT capability nor enough memory to hold guest RAM, so it is
-// worth raising an error on.
+// Applet mode is granted neither JIT capability nor enough memory to hold guest RAM,
+// so it is worth raising an error on.
 bool RunningAsApplication()
 {
   switch (appletGetAppletType())
@@ -54,6 +57,12 @@ bool RunningAsApplication()
   return total_memory >= 1024ull * 1024 * 1024;
 }
 
+void RedirectStdioToNxlink()
+{
+  if (__nxlink_host.s_addr != 0)
+    nxlinkStdio();
+}
+
 void LogHostEnvironment()
 {
   const u32 core_mask = Common::GetAvailableCoreMask();
@@ -72,14 +81,45 @@ void LogHostEnvironment()
   NOTICE_LOG_FMT(COMMON, "Video backend {}", VideoBackendBase::GetDefaultBackendDisplayName());
 }
 
+// BootManager::RestoreConfig() clears the CurrentRun layer when emulation ends, so these have to
+// be reapplied for every boot.
+void ApplyPlatformConfigOverrides()
+{
+  // DefaultCPUCore() is JITARM64 on AArch64, and AllocateExecutableMemory hands back nullptr here.
+  // CachedInterpreter's code block is declared non-executable, so it allocates through
+  // AllocateMemoryPages and runs as-is.
+  // TODO: drop this override once the emitters can target host executable memory.
+  Config::SetCurrent(Config::MAIN_CPU_CORE, PowerPC::CPUCore::CachedInterpreter);
+
+  // The block cache's large entry point map wants 64 GiB of address space, which is twenty times
+  // the application heap. There's no point even trying.
+  Config::SetCurrent(Config::MAIN_LARGE_ENTRY_POINTS_MAP, false);
+
+  // TODO: The PowerPC core is not the only thing that emits host code. VertexLoaderARM64 takes
+  // AllocCodeSpace's null region and poisons it on construction, which faults on address 0 at
+  // the first draw.
+  Config::SetCurrent(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
+}
+
 std::string RunGame(PadState& pad, const std::string& path)
 {
+  ApplyPlatformConfigOverrides();
+
   auto boot = BootParameters::GenerateFromFile(path, BootSessionData{});
   if (!boot)
   {
     ERROR_LOG_FMT(BOOT, "Could not read {}", path);
     return "Not a readable disc image.";
   }
+
+  // The libnx console and the Vulkan swapchain cannot both own the default window.
+  // This is in place to keep the NxLink connection alive throughout ownership changes.
+  consoleExit(nullptr);
+  RedirectStdioToNxlink();
+  Common::ScopeGuard console_guard([] {
+    consoleInit(nullptr);
+    RedirectStdioToNxlink();
+  });
 
   g_platform = std::make_unique<PlatformSwitch>(pad);
   Common::ScopeGuard platform_guard([] { g_platform.reset(); });
@@ -125,7 +165,7 @@ int main(int argc, char* argv[])
 
   const bool have_socket = R_SUCCEEDED(socketInitializeDefault());
   if (have_socket)
-    nxlinkStdio();
+    RedirectStdioToNxlink();
   Common::ScopeGuard socket_guard([have_socket] {
     if (have_socket)
       socketExit();
@@ -144,21 +184,6 @@ int main(int argc, char* argv[])
   File::CreateFullPath(GamePicker::GetRomDirectory());
   UICommon::Init();
   Common::ScopeGuard ui_common_guard([] { UICommon::Shutdown(); });
-
-  // DefaultCPUCore() is JITARM64 on AArch64, and AllocateExecutableMemory hands back nullptr here.
-  // CachedInterpreter's code block is declared non-executable, so it allocates through
-  // AllocateMemoryPages and runs as-is.
-  // TODO: drop this override once the emitters can target host executable memory.
-  Config::SetCurrent(Config::MAIN_CPU_CORE, PowerPC::CPUCore::CachedInterpreter);
-
-  // The block cache's large entry point map wants 64 GiB of address space, which is twenty times
-  // the application heap. There's no point even trying.
-  Config::SetCurrent(Config::MAIN_LARGE_ENTRY_POINTS_MAP, false);
-
-  // TODO: The PowerPC core is not the only thing that emits host code. VertexLoaderARM64 takes
-  // AllocCodeSpace's null region and poisons it on construction, which faults on address 0 at
-  // the first draw.
-  Config::SetCurrent(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
 
   LogHostEnvironment();
 

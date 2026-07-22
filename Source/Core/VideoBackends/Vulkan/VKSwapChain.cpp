@@ -21,6 +21,10 @@
 #include <X11/Xlib.h>
 #endif
 
+#if defined(__SWITCH__)
+#include <switch.h>
+#endif
+
 namespace Vulkan
 {
 SwapChain::SwapChain(const WindowSystemInfo& wsi, VkSurfaceKHR surface, bool vsync)
@@ -118,6 +122,28 @@ VkSurfaceKHR SwapChain::CreateVulkanSurface(VkInstance instance, const WindowSys
     if (res != VK_SUCCESS)
     {
       LOG_VULKAN_ERROR(res, "vkCreateMetalSurfaceEXT failed: ");
+      return VK_NULL_HANDLE;
+    }
+
+    return surface;
+  }
+#endif
+
+#if defined(VK_USE_PLATFORM_VI_NN)
+  if (wsi.type == WindowSystemType::Horizon)
+  {
+    VkViSurfaceCreateInfoNN surface_create_info = {
+        VK_STRUCTURE_TYPE_VI_SURFACE_CREATE_INFO_NN,  // VkStructureType             sType
+        nullptr,                                      // const void*                 pNext
+        0,                                            // VkViSurfaceCreateFlagsNN    flags
+        wsi.render_surface                            // void*                       window
+    };
+
+    VkSurfaceKHR surface;
+    VkResult res = vkCreateViSurfaceNN(instance, &surface_create_info, nullptr, &surface);
+    if (res != VK_SUCCESS)
+    {
+      LOG_VULKAN_ERROR(res, "vkCreateViSurfaceNN failed: ");
       return VK_NULL_HANDLE;
     }
 
@@ -273,6 +299,17 @@ bool SwapChain::SelectPresentMode()
 
 bool SwapChain::CreateSwapChain()
 {
+#if defined(__SWITCH__)
+  // The surface reports back whatever size the window has been set to, so the panel's native
+  // resolution has to be asked for before the capabilities are queried.
+  if (m_wsi.type == WindowSystemType::Horizon)
+  {
+    const bool docked = appletGetOperationMode() == AppletOperationMode_Console;
+    nwindowSetDimensions(static_cast<NWindow*>(m_wsi.render_surface), docked ? 1920 : 1280,
+                         docked ? 1080 : 720);
+  }
+#endif
+
   // Look up surface properties to determine image count and dimensions
   VkSurfaceCapabilitiesKHR surface_capabilities;
   VkResult res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_vulkan_context->GetPhysicalDevice(),

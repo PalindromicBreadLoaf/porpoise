@@ -9,6 +9,14 @@
 #include <dlfcn.h>
 #endif
 
+#if defined(__SWITCH__)
+#include <cstdlib>
+
+// NXVK is whole-archive linked into the NRO. There is no loader and no library to open.
+extern "C" VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vk_icdGetInstanceProcAddr(VkInstance instance,
+                                                                              const char* name);
+#endif
+
 #include "Common/DynamicLibrary.h"
 #if defined(__APPLE__)
 #include "Common/FileUtil.h"
@@ -38,6 +46,46 @@ static void ResetVulkanLibraryFunctionPointers()
 #undef VULKAN_INSTANCE_ENTRY_POINT
 #undef VULKAN_MODULE_ENTRY_POINT
 }
+
+#if defined(__SWITCH__)
+static bool BindNXVKEntryPoints()
+{
+  // NVK refuses to create a device without this.
+  setenv("NVK_I_WANT_A_BROKEN_VULKAN_DRIVER", "1", 1);
+
+  // TODO: Point MESA_SHADER_CACHE_DIR at the user directory once the disk cache is
+  // measured rather than assumed.
+  setenv("MESA_SHADER_CACHE_DISABLE", "1", 1);
+
+  bool required_functions_missing = false;
+  auto Bind = [&](auto& function, const char* name, bool is_required) {
+    function = reinterpret_cast<std::remove_reference_t<decltype(function)>>(
+        vk_icdGetInstanceProcAddr(VK_NULL_HANDLE, name));
+    if (!function && is_required)
+    {
+      ERROR_LOG_FMT(HOST_GPU, "Vulkan: NXVK does not provide required module function {}", name);
+      required_functions_missing = true;
+    }
+  };
+
+  vkGetInstanceProcAddr = &vk_icdGetInstanceProcAddr;
+
+  // A null instance resolves the global entrypoints and nothing else, so vkGetDeviceProcAddr is
+  // left for LoadVulkanInstanceFunctions.
+  Bind(vkCreateInstance, "vkCreateInstance", true);
+  Bind(vkEnumerateInstanceExtensionProperties, "vkEnumerateInstanceExtensionProperties", true);
+  Bind(vkEnumerateInstanceLayerProperties, "vkEnumerateInstanceLayerProperties", false);
+  Bind(vkEnumerateInstanceVersion, "vkEnumerateInstanceVersion", false);
+
+  if (required_functions_missing)
+  {
+    ResetVulkanLibraryFunctionPointers();
+    return false;
+  }
+
+  return true;
+}
+#else
 
 static Common::DynamicLibrary s_vulkan_module;
 
@@ -91,9 +139,13 @@ static bool OpenVulkanLibrary(bool force_system_library)
   return s_vulkan_module.Open(filename.c_str());
 #endif
 }
+#endif
 
 bool LoadVulkanLibrary(bool force_system_library)
 {
+#if defined(__SWITCH__)
+  return BindNXVKEntryPoints();
+#else
   if (!s_vulkan_module.IsOpen() && !OpenVulkanLibrary(force_system_library))
     return false;
 
@@ -109,13 +161,18 @@ bool LoadVulkanLibrary(bool force_system_library)
 #undef VULKAN_MODULE_ENTRY_POINT
 
   return true;
+#endif
 }
 
 void UnloadVulkanLibrary()
 {
+#if defined(__SWITCH__)
+  ResetVulkanLibraryFunctionPointers();
+#else
   s_vulkan_module.Close();
   if (!s_vulkan_module.IsOpen())
     ResetVulkanLibraryFunctionPointers();
+#endif
 }
 
 bool LoadVulkanInstanceFunctions(VkInstance instance)
@@ -134,6 +191,12 @@ bool LoadVulkanInstanceFunctions(VkInstance instance)
   LoadFunction(reinterpret_cast<PFN_vkVoidFunction*>(&name), #name, required);
 #include "VideoBackends/Vulkan/VulkanEntryPoints.inl"
 #undef VULKAN_INSTANCE_ENTRY_POINT
+
+#if defined(__SWITCH__)
+  // Deferred from LoadVulkanLibrary, which had no instance to resolve it against.
+  LoadFunction(reinterpret_cast<PFN_vkVoidFunction*>(&vkGetDeviceProcAddr), "vkGetDeviceProcAddr",
+               true);
+#endif
 
   return !required_functions_missing;
 }

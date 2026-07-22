@@ -13,6 +13,7 @@ enum class WindowSystemType
   Wayland,
   FBDev,
   Haiku,
+  Horizon,
 };
 
 struct WindowSystemInfo

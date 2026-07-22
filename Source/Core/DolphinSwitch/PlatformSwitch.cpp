@@ -10,6 +10,7 @@
 #include "Core/IOS/IOS.h"
 #include "Core/IOS/STM/STM.h"
 #include "Core/System.h"
+#include "VideoCommon/Present.h"
 
 namespace
 {
@@ -24,6 +25,7 @@ PlatformSwitch::PlatformSwitch(PadState& pad) : m_pad(pad)
 bool PlatformSwitch::Init()
 {
   m_window = nwindowGetDefault();
+  m_operation_mode = appletGetOperationMode();
   return m_window != nullptr;
 }
 
@@ -41,6 +43,7 @@ void PlatformSwitch::MainLoop()
     m_focused.store(appletGetFocusState() == AppletFocusState_InFocus, std::memory_order_relaxed);
 
     PollHostInput();
+    PollOperationMode();
     UpdateRunningFlag();
     Core::HostDispatchJobs(system);
 
@@ -56,6 +59,20 @@ void PlatformSwitch::PollHostInput()
   constexpr u64 exit_chord = HidNpadButton_Plus | HidNpadButton_Minus;
   if ((padGetButtons(&m_pad) & exit_chord) == exit_chord)
     RequestShutdown();
+}
+
+void PlatformSwitch::PollOperationMode()
+{
+  const AppletOperationMode mode = appletGetOperationMode();
+  if (mode == m_operation_mode)
+    return;
+
+  m_operation_mode = mode;
+
+  // The window can only be resized while no buffers are registered with it, so the size the
+  // backend picks up is set from inside the swapchain recreate this triggers.
+  if (g_presenter)
+    g_presenter->ResizeSurface();
 }
 
 void PlatformSwitch::UpdateRunningFlag()
@@ -95,10 +112,9 @@ void PlatformSwitch::SetTitle(const std::string& title)
 WindowSystemInfo PlatformSwitch::GetWindowSystemInfo() const
 {
   WindowSystemInfo wsi;
-  // TODO: Add a Horizon WindowSystemType and present to the nwindow through VK_NN_vi_surface.
-  wsi.type = WindowSystemType::Headless;
+  wsi.type = WindowSystemType::Horizon;
   wsi.render_window = m_window;
-  wsi.render_surface = nullptr;
+  wsi.render_surface = m_window;
   return wsi;
 }
 

@@ -145,6 +145,10 @@ VulkanContext::~VulkanContext()
 
 bool VulkanContext::CheckValidationLayerAvailablility()
 {
+  // An implementation reached without a loader in front of it need not provide layer enumeration.
+  if (!vkEnumerateInstanceLayerProperties)
+    return false;
+
   u32 extension_count = 0;
   VkResult res = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);
   if (res != VK_SUCCESS)
@@ -371,6 +375,12 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
 #endif
 #if defined(VK_USE_PLATFORM_METAL_EXT)
   if (wstype == WindowSystemType::MacOS && !AddExtension(VK_EXT_METAL_SURFACE_EXTENSION_NAME, true))
+  {
+    return false;
+  }
+#endif
+#if defined(VK_USE_PLATFORM_VI_NN)
+  if (wstype == WindowSystemType::Horizon && !AddExtension(VK_NN_VI_SURFACE_EXTENSION_NAME, true))
   {
     return false;
   }

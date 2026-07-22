@@ -21,6 +21,10 @@
 #define VK_USE_PLATFORM_METAL_EXT
 #endif
 
+#if defined(__SWITCH__)
+#define VK_USE_PLATFORM_VI_NN
+#endif
+
 #include "vulkan/vulkan.h"
 
 #ifdef ANDROID

@@ -495,7 +495,7 @@ if(PORPOISE)
   set(ENABLE_SDL 0)
 
   # Vulkan via NXVK.
-  set(ENABLE_VULKAN 0)
+  set(ENABLE_VULKAN 1)
 
   set(ENABLE_LLVM 0)
   set(ENABLE_ANALYTICS 0)
@@ -706,6 +706,10 @@ if(ENABLE_VULKAN)
 
   if (ANDROID AND _M_ARM_64)
     add_subdirectory(Externals/libadrenotools)
+  endif()
+
+  if(PORPOISE)
+    include(NXVK)
   endif()
 endif()
 
