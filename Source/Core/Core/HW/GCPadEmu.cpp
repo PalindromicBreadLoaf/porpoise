@@ -197,6 +197,39 @@ void GCPad::LoadDefaults(const ControllerInterface& ciface)
 
   // Triforce Coin
   m_triforce->SetControlExpression(2, "pulse(`Android/0/Device Sensors:Accel Down` > 15, 0.1)");
+#elif defined(__SWITCH__)
+  // Buttons: A, B, X, Y, Z
+  m_buttons->SetControlExpression(0, "`A`");
+  m_buttons->SetControlExpression(1, "`B`");
+  m_buttons->SetControlExpression(2, "`X`");
+  m_buttons->SetControlExpression(3, "`Y`");
+  m_buttons->SetControlExpression(4, "`R`");
+  m_buttons->SetControlExpression(5, "`Plus`");  // Start
+
+  // D-Pad
+  m_dpad->SetControlExpression(0, "`Pad Up`");
+  m_dpad->SetControlExpression(1, "`Pad Down`");
+  m_dpad->SetControlExpression(2, "`Pad Left`");
+  m_dpad->SetControlExpression(3, "`Pad Right`");
+
+  m_main_stick->SetControlExpression(0, "`Left Y+`");
+  m_main_stick->SetControlExpression(1, "`Left Y-`");
+  m_main_stick->SetControlExpression(2, "`Left X-`");
+  m_main_stick->SetControlExpression(3, "`Left X+`");
+
+  m_c_stick->SetControlExpression(0, "`Right Y+`");
+  m_c_stick->SetControlExpression(1, "`Right Y-`");
+  m_c_stick->SetControlExpression(2, "`Right X-`");
+  m_c_stick->SetControlExpression(3, "`Right X+`");
+
+  // A real GameCube controller on the official adapter reports its travel as an axis and the
+  // click at the bottom as ZL/ZR; every other controller only has the digital press to offer.
+  m_triggers->SetControlExpression(0, "`ZL`");  // L
+  m_triggers->SetControlExpression(1, "`ZR`");  // R
+  m_triggers->SetControlExpression(2, "`Trigger L`");
+  m_triggers->SetControlExpression(3, "`Trigger R`");
+
+  m_rumble->SetControlExpression(0, "`Motor`");
 #else
   // Buttons: A, B, X, Y, Z
   m_buttons->SetControlExpression(0, "`X`");

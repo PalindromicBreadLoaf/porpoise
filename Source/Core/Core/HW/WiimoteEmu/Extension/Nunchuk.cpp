@@ -176,7 +176,17 @@ void Nunchuk::DoState(PointerWrap& p)
 
 void Nunchuk::LoadDefaults()
 {
-#ifndef ANDROID
+#if defined(__SWITCH__)
+  // Stick
+  m_stick->SetControlExpression(0, "`Left Y+`");
+  m_stick->SetControlExpression(1, "`Left Y-`");
+  m_stick->SetControlExpression(2, "`Left X-`");
+  m_stick->SetControlExpression(3, "`Left X+`");
+
+  // Buttons
+  m_buttons->SetControlExpression(0, "`ZL`");  // C
+  m_buttons->SetControlExpression(1, "`L`");   // Z
+#elif !defined(ANDROID)
   // Stick
   m_stick->SetControlExpression(0, "W");  // up
   m_stick->SetControlExpression(1, "S");  // down

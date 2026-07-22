@@ -87,7 +87,13 @@ PRIVATE
   spng::spng
 )
 
-if(WIN32)
+if(PORPOISE)
+  target_compile_definitions(inputcommon PRIVATE -DCIFACE_USE_HORIZON)
+  target_sources(inputcommon PRIVATE
+    ControllerInterface/Horizon/Horizon.cpp
+    ControllerInterface/Horizon/Horizon.h
+  )
+elseif(WIN32)
   target_sources(inputcommon PRIVATE
     ControllerInterface/DInput/DInput.cpp
     ControllerInterface/DInput/DInput.h

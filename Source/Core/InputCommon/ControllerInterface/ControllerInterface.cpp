@@ -24,6 +24,9 @@
 #ifdef CIFACE_USE_ANDROID
 #include "InputCommon/ControllerInterface/Android/Android.h"
 #endif
+#ifdef CIFACE_USE_HORIZON
+#include "InputCommon/ControllerInterface/Horizon/Horizon.h"
+#endif
 #ifdef CIFACE_USE_EVDEV
 #include "InputCommon/ControllerInterface/evdev/evdev.h"
 #endif
@@ -72,6 +75,9 @@ void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
 #endif
 #ifdef CIFACE_USE_ANDROID
   m_input_backends.emplace_back(ciface::Android::CreateInputBackend(this));
+#endif
+#ifdef CIFACE_USE_HORIZON
+  m_input_backends.emplace_back(ciface::Horizon::CreateInputBackend(this));
 #endif
 #ifdef CIFACE_USE_EVDEV
   m_input_backends.emplace_back(ciface::evdev::CreateInputBackend(this));

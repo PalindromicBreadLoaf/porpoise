@@ -707,6 +707,43 @@ void Wiimote::LoadDefaults(const ControllerInterface& ciface)
   m_imu_gyroscope->SetControlExpression(3, "`Android/0/Device Sensors:Gyro Roll Right`");
   m_imu_gyroscope->SetControlExpression(4, "`Android/0/Device Sensors:Gyro Yaw Left`");
   m_imu_gyroscope->SetControlExpression(5, "`Android/0/Device Sensors:Gyro Yaw Right`");
+#elif defined(__SWITCH__)
+  // Buttons: A, B, 1, 2, -, +, HOME. Sadly can't use the real home button, so shoulder it is.
+  m_buttons->SetControlExpression(0, "`A`");
+  m_buttons->SetControlExpression(1, "`ZR`");
+  m_buttons->SetControlExpression(2, "`X`");
+  m_buttons->SetControlExpression(3, "`Y`");
+  m_buttons->SetControlExpression(4, "`Minus`");
+  m_buttons->SetControlExpression(5, "`Plus`");
+  m_buttons->SetControlExpression(6, "`R`");
+
+  // D-Pad
+  m_dpad->SetControlExpression(0, "`Pad Up`");
+  m_dpad->SetControlExpression(1, "`Pad Down`");
+  m_dpad->SetControlExpression(2, "`Pad Left`");
+  m_dpad->SetControlExpression(3, "`Pad Right`");
+
+  // IR. This one needs a full qualifier.
+  m_ir->SetControlExpression(0, "`Horizon/0/Touchscreen:Touch Y-`");
+  m_ir->SetControlExpression(1, "`Horizon/0/Touchscreen:Touch Y+`");
+  m_ir->SetControlExpression(2, "`Horizon/0/Touchscreen:Touch X-`");
+  m_ir->SetControlExpression(3, "`Horizon/0/Touchscreen:Touch X+`");
+
+  // Motion Source
+  m_imu_accelerometer->SetControlExpression(0, "`Accel Up`");
+  m_imu_accelerometer->SetControlExpression(1, "`Accel Down`");
+  m_imu_accelerometer->SetControlExpression(2, "`Accel Left`");
+  m_imu_accelerometer->SetControlExpression(3, "`Accel Right`");
+  m_imu_accelerometer->SetControlExpression(4, "`Accel Forward`");
+  m_imu_accelerometer->SetControlExpression(5, "`Accel Backward`");
+  m_imu_gyroscope->SetControlExpression(0, "`Gyro Pitch Up`");
+  m_imu_gyroscope->SetControlExpression(1, "`Gyro Pitch Down`");
+  m_imu_gyroscope->SetControlExpression(2, "`Gyro Roll Left`");
+  m_imu_gyroscope->SetControlExpression(3, "`Gyro Roll Right`");
+  m_imu_gyroscope->SetControlExpression(4, "`Gyro Yaw Left`");
+  m_imu_gyroscope->SetControlExpression(5, "`Gyro Yaw Right`");
+
+  m_rumble->SetControlExpression(0, "`Motor`");
 #else
 // Buttons
 #if defined HAVE_X11 && HAVE_X11

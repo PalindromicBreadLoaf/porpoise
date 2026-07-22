@@ -171,7 +171,9 @@ int main(int argc, char* argv[])
       socketExit();
   });
 
-  padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+  // Eight players for GameCube multiplayer.
+  // GC style so a controller on the official adapter reports its analog triggers.
+  padConfigureInput(8, HidNpadStyleSet_NpadStandard | HidNpadStyleTag_NpadGc);
   PadState pad;
   padInitializeDefault(&pad);
 
