@@ -145,8 +145,15 @@ int main(int argc, char* argv[])
   UICommon::Init();
   Common::ScopeGuard ui_common_guard([] { UICommon::Shutdown(); });
 
-  // TODO: Give CachedInterpreter a non-executable code path and pick between the two here.
-  Config::SetCurrent(Config::MAIN_CPU_CORE, PowerPC::CPUCore::Interpreter);
+  // DefaultCPUCore() is JITARM64 on AArch64, and AllocateExecutableMemory hands back nullptr here.
+  // CachedInterpreter's code block is declared non-executable, so it allocates through
+  // AllocateMemoryPages and runs as-is.
+  // TODO: drop this override once the emitters can target host executable memory.
+  Config::SetCurrent(Config::MAIN_CPU_CORE, PowerPC::CPUCore::CachedInterpreter);
+
+  // The block cache's large entry point map wants 64 GiB of address space, which is twenty times
+  // the application heap. There's no point even trying.
+  Config::SetCurrent(Config::MAIN_LARGE_ENTRY_POINTS_MAP, false);
 
   // TODO: The PowerPC core is not the only thing that emits host code. VertexLoaderARM64 takes
   // AllocCodeSpace's null region and poisons it on construction, which faults on address 0 at
