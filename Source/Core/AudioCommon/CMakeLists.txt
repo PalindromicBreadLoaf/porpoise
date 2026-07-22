@@ -36,6 +36,15 @@ if(ANDROID)
   endif()
 endif()
 
+if(PORPOISE)
+  message(STATUS "Enabling audout sound backend")
+  target_sources(audiocommon PRIVATE
+    HorizonSoundStream.cpp
+    HorizonSoundStream.h
+  )
+  target_compile_definitions(audiocommon PRIVATE HAVE_AUDOUT=1)
+endif()
+
 if(ENABLE_ALSA)
   find_package(ALSA)
   if(ALSA_FOUND)

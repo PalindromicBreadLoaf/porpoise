@@ -21,6 +21,7 @@
 #define BACKEND_OPENAL "OpenAL"
 #define BACKEND_PULSEAUDIO "Pulse"
 #define BACKEND_OPENSLES "OpenSLES"
+#define BACKEND_HORIZON "Horizon"
 #define BACKEND_WASAPI _trans("WASAPI (Exclusive Mode)")
 
 namespace PowerPC

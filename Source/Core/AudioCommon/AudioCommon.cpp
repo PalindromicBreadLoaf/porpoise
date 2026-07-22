@@ -8,6 +8,7 @@
 
 #include "AudioCommon/AlsaSoundStream.h"
 #include "AudioCommon/CubebStream.h"
+#include "AudioCommon/HorizonSoundStream.h"
 #include "AudioCommon/Mixer.h"
 #include "AudioCommon/NullSoundStream.h"
 #include "AudioCommon/OpenALStream.h"
@@ -42,6 +43,8 @@ static std::unique_ptr<SoundStream> CreateSoundStreamForBackend(std::string_view
     return std::make_unique<OpenSLESStream>();
   else if (backend == BACKEND_WASAPI && WASAPIStream::IsValid())
     return std::make_unique<WASAPIStream>();
+  else if (backend == BACKEND_HORIZON && HorizonSoundStream::IsValid())
+    return std::make_unique<HorizonSoundStream>();
   return {};
 }
 
@@ -96,6 +99,8 @@ std::string GetDefaultSoundBackend()
 {
 #if defined(ANDROID)
   return BACKEND_OPENSLES;
+#elif defined(__SWITCH__)
+  return BACKEND_HORIZON;
 #else
   if (CubebStream::IsValid())
     return BACKEND_CUBEB;
@@ -131,6 +136,8 @@ std::vector<std::string> GetSoundBackends()
     backends.emplace_back(BACKEND_OPENSLES);
   if (WASAPIStream::IsValid())
     backends.emplace_back(BACKEND_WASAPI);
+  if (HorizonSoundStream::IsValid())
+    backends.emplace_back(BACKEND_HORIZON);
 
   return backends;
 }
@@ -158,7 +165,8 @@ bool SupportsVolumeChanges(std::string_view backend)
   // FIXME: this one should ask the backend whether it supports it.
   //       but getting the backend from string etc. is probably
   //       too much just to enable/disable a stupid slider...
-  return backend == BACKEND_CUBEB || backend == BACKEND_OPENAL || backend == BACKEND_WASAPI;
+  return backend == BACKEND_CUBEB || backend == BACKEND_OPENAL || backend == BACKEND_WASAPI ||
+         backend == BACKEND_HORIZON;
 }
 
 void UpdateSoundStream(Core::System& system)
