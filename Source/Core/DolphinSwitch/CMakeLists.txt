@@ -1,7 +1,9 @@
 add_executable(porpoise
   CrashHandlerSwitch.cpp
+  GamePickerSwitch.cpp
   HostSwitch.cpp
   MainSwitch.cpp
+  PlatformSwitch.cpp
 )
 
 target_link_libraries(porpoise

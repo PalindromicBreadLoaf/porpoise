@@ -3,24 +3,37 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <cstdio>
+#include <memory>
+#include <string>
 
 #include <switch.h>
 
 #include "Common/CommonTypes.h"
+#include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
-#include "Common/Logging/LogManager.h"
-#include "Common/MsgHandler.h"
+#include "Common/ScopeGuard.h"
 #include "Common/Thread.h"
 #include "Common/Version.h"
-#include "Core/HW/Memmap.h"
+#include "Core/Boot/Boot.h"
+#include "Core/BootManager.h"
+#include "Core/Config/GraphicsSettings.h"
+#include "Core/Config/MainSettings.h"
+#include "Core/Core.h"
+#include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
+#include "DolphinSwitch/GamePickerSwitch.h"
+#include "DolphinSwitch/PlatformSwitch.h"
 #include "UICommon/UICommon.h"
 #include "VideoCommon/VideoBackendBase.h"
+#include "VideoCommon/VideoConfig.h"
+
+std::unique_ptr<PlatformSwitch> g_platform;
 
 namespace
 {
-// Verify a proper application is used to launch the emulator via number of CPUs and RAM amount.
+// Applet mode is granted neither JIT capability nor enough memory to hold guest RAM, so it is
+// worth raising an error on.
 bool RunningAsApplication()
 {
   switch (appletGetAppletType())
@@ -41,7 +54,6 @@ bool RunningAsApplication()
   return total_memory >= 1024ull * 1024 * 1024;
 }
 
-// System/environment information.
 void LogHostEnvironment()
 {
   const u32 core_mask = Common::GetAvailableCoreMask();
@@ -57,76 +69,114 @@ void LogHostEnvironment()
                  total_memory / 0x100000);
   NOTICE_LOG_FMT(COMMON, "User directory {}", File::GetUserPath(D_USER_IDX));
   NOTICE_LOG_FMT(COMMON, "Sys directory {}", File::GetSysDirectory());
+  NOTICE_LOG_FMT(COMMON, "Video backend {}", VideoBackendBase::GetDefaultBackendDisplayName());
 }
 
-// Build the system to verify everything works.
-void ExerciseCore()
+std::string RunGame(PadState& pad, const std::string& path)
 {
-  NOTICE_LOG_FMT(COMMON, "Constructing Core::System...");
-  auto& system = Core::System::GetInstance();
-  system.Initialize();
-  NOTICE_LOG_FMT(COMMON, "Core::System constructed.");
+  auto boot = BootParameters::GenerateFromFile(path, BootSessionData{});
+  if (!boot)
+  {
+    ERROR_LOG_FMT(BOOT, "Could not read {}", path);
+    return "Not a readable disc image.";
+  }
 
-  auto& memory = system.GetMemory();
-  memory.Init();
-  NOTICE_LOG_FMT(COMMON, "Guest memory up: {} MiB RAM, fastmem {}", memory.GetRamSize() / 0x100000,
-                 memory.InitFastmemArena() ? "arena" : "off");
-  memory.ShutdownFastmemArena();
-  memory.Shutdown();
-  NOTICE_LOG_FMT(COMMON, "Guest memory torn down.");
+  g_platform = std::make_unique<PlatformSwitch>(pad);
+  Common::ScopeGuard platform_guard([] { g_platform.reset(); });
+
+  if (!g_platform->Init())
+  {
+    ERROR_LOG_FMT(BOOT, "Could not acquire the window.");
+    return "Could not acquire the window.";
+  }
+
+  const WindowSystemInfo wsi = g_platform->GetWindowSystemInfo();
+  UICommon::InitControllers(wsi);
+  Common::ScopeGuard controller_guard([] { UICommon::ShutdownControllers(); });
+
+  // The core tearing itself down (a guest reset, or some sort of error) has to
+  // break the run loop too.
+  auto state_hook = Core::AddOnStateChangedCallback([](const Core::State state) {
+    if (state == Core::State::Uninitialized && g_platform)
+      g_platform->Stop();
+  });
+
+  auto& system = Core::System::GetInstance();
+  if (!BootManager::BootCore(system, std::move(boot), wsi))
+  {
+    ERROR_LOG_FMT(BOOT, "Could not boot {}", path);
+    return "Could not boot. Check the log.";
+  }
+
+  NOTICE_LOG_FMT(BOOT, "Booted {}", path);
+  g_platform->MainLoop();
+
+  Core::Stop(system);
+  Core::Shutdown(system);
+  NOTICE_LOG_FMT(BOOT, "Core shut down.");
+  return {};
 }
 }  // namespace
 
 int main(int argc, char* argv[])
 {
   consoleInit(nullptr);
+  Common::ScopeGuard console_guard([] { consoleExit(nullptr); });
 
   const bool have_socket = R_SUCCEEDED(socketInitializeDefault());
   if (have_socket)
     nxlinkStdio();
+  Common::ScopeGuard socket_guard([have_socket] {
+    if (have_socket)
+      socketExit();
+  });
 
-  PadState pad;
   padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+  PadState pad;
   padInitializeDefault(&pad);
 
-  std::printf("porpoise %s\n\n", Common::GetScmDescStr().c_str());
-
-  if (!RunningAsApplication())
-  {
-    std::printf("WARNING: not running as an application.\n"
-                "Horizon will not grant JIT capability in applet mode, and the emulator will be\n"
-                "unusably slow. Launch Porpoise by holding R while starting a game.\n\n");
-  }
+  // Nothing is logged until UICommon::Init brings up LogManager, so this is the only marker if
+  // something below goes wrong early.
+  std::printf("porpoise %s\n", Common::GetScmDescStr().c_str());
 
   UICommon::SetUserDirectory("");
   UICommon::CreateDirectories();
+  File::CreateFullPath(GamePicker::GetRomDirectory());
   UICommon::Init();
+  Common::ScopeGuard ui_common_guard([] { UICommon::Shutdown(); });
+
+  // TODO: Give CachedInterpreter a non-executable code path and pick between the two here.
+  Config::SetCurrent(Config::MAIN_CPU_CORE, PowerPC::CPUCore::Interpreter);
+
+  // TODO: The PowerPC core is not the only thing that emits host code. VertexLoaderARM64 takes
+  // AllocCodeSpace's null region and poisons it on construction, which faults on address 0 at
+  // the first draw.
+  Config::SetCurrent(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
 
   LogHostEnvironment();
-  ExerciseCore();
 
-  std::printf("Log written to %s\n", File::GetUserPath(F_MAINLOG_IDX).c_str());
-  std::printf("\nVideo backends:");
-  for (const auto& backend : VideoBackendBase::GetAvailableBackends())
-    std::printf(" %s", backend->GetDisplayName().c_str());
+  std::string pending = argc > 1 && argv[1] != nullptr ? argv[1] : std::string{};
+  std::string notice;
 
-  // TODO: Replaces the wait-for-+ loop with a real Platform run loop.
-  std::printf("\n\nPress + to exit.\n");
+  if (!RunningAsApplication())
+  {
+    ERROR_LOG_FMT(COMMON, "Not running as an application. Horizon grants JIT capability and the "
+                          "full heap only in application mode.");
+    notice = "WARNING: applet mode. Relaunch by holding R while starting a game.";
+  }
 
   while (appletMainLoop())
   {
-    padUpdate(&pad);
-    if (padGetButtonsDown(&pad) & HidNpadButton_Plus)
+    std::string path = std::move(pending);
+    pending.clear();
+
+    if (path.empty())
+      path = GamePicker::Run(pad, notice);
+    if (path.empty())
       break;
 
-    consoleUpdate(nullptr);
+    notice = RunGame(pad, path);
   }
 
-  UICommon::Shutdown();
-
-  if (have_socket)
-    socketExit();
-
-  consoleExit(nullptr);
   return 0;
 }

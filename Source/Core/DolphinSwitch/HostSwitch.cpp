@@ -3,14 +3,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // The Host_* free functions the core calls back into.
-// TODO: Make these work.
 
 #include "Core/Host.h"
 
 #include "Common/Logging/Log.h"
+#include "DolphinSwitch/PlatformSwitch.h"
 
 std::vector<std::string> Host_GetPreferredLocales()
 {
+  // TODO: Report the console's language through setGetSystemLanguage once there is a UI to
+  // translate.
   return {};
 }
 
@@ -27,13 +29,16 @@ bool Host_UIBlocksControllerState()
   return false;
 }
 
-void Host_Message(HostMessageID id)
+void Host_Message(const HostMessageID id)
 {
+  if (id == HostMessageID::WMUserStop && g_platform)
+    g_platform->Stop();
 }
 
 void Host_UpdateTitle(const std::string& title)
 {
-  INFO_LOG_FMT(COMMON, "{}", title);
+  if (g_platform)
+    g_platform->SetTitle(title);
 }
 
 void Host_UpdateDisasmDialog()
@@ -50,16 +55,17 @@ void Host_JitProfileDataWiped()
 
 void Host_RequestRenderWindowSize(int width, int height)
 {
+  // The nwindow is whatever the dock state says it is.
 }
 
 bool Host_RendererHasFocus()
 {
-  return true;
+  return g_platform && g_platform->IsWindowFocused();
 }
 
 bool Host_RendererHasFullFocus()
 {
-  return true;
+  return Host_RendererHasFocus();
 }
 
 bool Host_RendererIsFullscreen()
