@@ -97,6 +97,7 @@ HorizonSoundStream::~HorizonSoundStream()
 void HorizonSoundStream::SoundLoop()
 {
   Common::SetCurrentThreadName("Audio thread - horizon");
+  Common::PinCurrentThreadToRole(Common::ThreadCoreRole::Audio);
   if (R_FAILED(svcSetThreadPriority(CUR_THREAD_HANDLE, THREAD_PRIORITY)))
     WARN_LOG_FMT(AUDIO, "Could not raise the audio thread's priority; expect underruns.");
 

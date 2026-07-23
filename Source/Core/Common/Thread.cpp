@@ -34,6 +34,9 @@
 #ifdef _WIN32
 #include "Common/StringUtil.h"
 #endif
+#ifdef __SWITCH__
+#include "Common/Logging/Log.h"
+#endif
 
 namespace Common
 {
@@ -131,6 +134,56 @@ u32 GetAvailableCoreMask()
   if (R_FAILED(svcGetInfo(&core_mask, InfoType_CoreMask, CUR_PROCESS_HANDLE, 0)))
     return 0;
   return static_cast<u32>(core_mask);
+}
+
+void PinCurrentThreadToRole(ThreadCoreRole role)
+{
+  const u32 available = GetAvailableCoreMask();
+
+  constexpr int MAX_CORES = 4;
+  s32 cores[MAX_CORES];
+  int count = 0;
+  for (s32 core = 0; core < 32 && count < MAX_CORES; ++core)
+  {
+    if ((available >> core) & 1)
+      cores[count++] = core;
+  }
+
+  if (count == 0)
+    return;
+
+  // The CPU and GPU threads each claim a core with everything else shares the first one.
+  s32 cpu_core = cores[0];
+  s32 gpu_core = cores[0];
+  const s32 shared_core = cores[0];
+  if (count >= 3)
+  {
+    cpu_core = cores[1];
+    gpu_core = cores[2];
+  }
+  else if (count == 2)
+  {
+    cpu_core = cores[1];
+  }
+
+  s32 target = shared_core;
+  const char* role_name = "shared";
+  switch (role)
+  {
+  case ThreadCoreRole::Cpu:
+    target = cpu_core;
+    role_name = "cpu";
+    break;
+  case ThreadCoreRole::Gpu:
+    target = gpu_core;
+    role_name = "gpu";
+    break;
+  default:
+    break;
+  }
+
+  SetCurrentThreadAffinity(1u << target);
+  INFO_LOG_FMT(COMMON, "Pinned {} thread to core {}", role_name, target);
 }
 
 #endif

@@ -328,6 +328,10 @@ static void CpuThread(Core::System& system, const std::optional<std::string>& sa
   else
     Common::SetCurrentThreadName("CPU-GPU thread");
 
+#ifdef __SWITCH__
+  Common::PinCurrentThreadToRole(Common::ThreadCoreRole::Cpu);
+#endif
+
   // This needs to be delayed until after the video backend is ready.
   DolphinAnalytics::Instance().ReportGameStart();
 
@@ -410,6 +414,10 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
   else
     Common::SetCurrentThreadName("FIFO-GPU thread");
 
+#ifdef __SWITCH__
+  Common::PinCurrentThreadToRole(Common::ThreadCoreRole::Cpu);
+#endif
+
   // Enter CPU run loop. When we leave it - we are done.
   if (auto cpu_core = system.GetFifoPlayer().GetCPUCore())
   {
@@ -471,6 +479,10 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
     // Spawn the GPU thread.
     std::thread gpu_thread{[&] {
       Common::SetCurrentThreadName("Video thread");
+
+#ifdef __SWITCH__
+      Common::PinCurrentThreadToRole(Common::ThreadCoreRole::Gpu);
+#endif
 
       const bool is_init = init_video();
       init_from_thread.set_value(is_init);

@@ -207,6 +207,10 @@ void AsyncShaderCompiler::WorkerThreadEntryPoint(void* param)
 {
   Common::SetCurrentThreadName("AsyncShaderCompiler Worker");
 
+#ifdef __SWITCH__
+  Common::PinCurrentThreadToRole(Common::ThreadCoreRole::Worker);
+#endif
+
   // Initialize worker thread with backend-specific method.
   if (!WorkerThreadInitWorkerThread(param))
   {

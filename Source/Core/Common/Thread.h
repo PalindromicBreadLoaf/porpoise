@@ -29,6 +29,17 @@ void SetCurrentThreadAffinity(u32 mask);
 #ifdef __SWITCH__
 // The set of cores the process was granted. Core 3 is normally (always?) reserved for the system.
 u32 GetAvailableCoreMask();
+
+// Pin threads to core by role.
+enum class ThreadCoreRole
+{
+  Cpu,
+  Gpu,
+  Audio,
+  Host,
+  Worker,
+};
+void PinCurrentThreadToRole(ThreadCoreRole role);
 #endif
 
 void SleepCurrentThread(int ms);

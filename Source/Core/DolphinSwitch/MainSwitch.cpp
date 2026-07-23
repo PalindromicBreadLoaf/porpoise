@@ -97,6 +97,9 @@ void ApplyPlatformConfigOverrides()
     Config::SetCurrent(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
   }
 
+  // The CPU and GPU threads each get a dedicated core, so dual-core is mandatory here.
+  Config::SetCurrent(Config::MAIN_CPU_THREAD, true);
+
   // The block cache's large entry point map wants 64 GiB of address space, which is twenty times
   // the application heap. There's no point even trying.
   Config::SetCurrent(Config::MAIN_LARGE_ENTRY_POINTS_MAP, false);
@@ -198,6 +201,9 @@ int main(int argc, char* argv[])
   Common::ScopeGuard ui_common_guard([] { UICommon::Shutdown(); });
 
   LogHostEnvironment();
+
+  // The frontend/applet loop shares a core with audio and the background workers.
+  Common::PinCurrentThreadToRole(Common::ThreadCoreRole::Host);
 
   // Reserved once for the whole session. Both JitArm64 and VertexLoaderARM64 carve out of this.
   Common::HostCodeMemory::Init();
