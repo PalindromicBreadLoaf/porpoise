@@ -13,6 +13,12 @@
 #include "Core/Core.h"
 #include "VideoCommon/VideoConfig.h"
 
+#ifdef __SWITCH__
+#include "Core/HW/Memmap.h"
+#include "Core/PowerPC/PowerPC.h"
+#include "Core/System.h"
+#endif
+
 PerformanceMetrics::PerformanceMetrics()
 {
   const auto invalidate_counters_last_time = [this](Core::State) {
@@ -370,6 +376,44 @@ void PerformanceMetrics::DrawImGuiStats(const float backbuffer_scale)
     }
     ImGui::End();
   }
+
+#ifdef __SWITCH__
+  // Show the current blocker for performance to make sure optimisation work is being allocated properly.
+  if (g_ActiveConfig.bShowFPS || g_ActiveConfig.bShowSpeed)
+  {
+    auto& system = Core::System::GetInstance();
+    const char* core_name = system.GetPowerPC().GetCPUName();
+    const bool dual_core = system.IsDualCoreMode();
+    const bool fastmem = system.GetMemory().GetPhysicalBase() != nullptr;
+    const bool software_vertex_loader =
+        Config::Get(Config::GFX_VERTEX_LOADER_TYPE) == VertexLoaderType::Software;
+
+    // Determine what we are bound by.
+    const char* bound = "full speed";
+    if (speed < 0.95)
+      bound = (vps > 5.0 && fps < 0.75 * vps) ? "GPU/present-bound" : "CPU-bound";
+
+    ImGui::SetNextWindowPos(ImVec2(window_x, window_y), set_next_position_condition,
+                            ImVec2(1.0f, 0.0f));
+    ImGui::SetNextWindowBgAlpha(bg_alpha);
+
+    if (ImGui::Begin("SwitchDiagnostics", nullptr, imgui_flags))
+    {
+      if (stack_vertically)
+        window_y += ImGui::GetWindowHeight() + window_padding;
+      else
+        window_x -= ImGui::GetWindowWidth() + window_padding;
+      clamp_window_position();
+
+      const ImVec4 color(r, g, b, 1.0f);
+      ImGui::TextColored(color, "Core: %s (%s)", core_name, dual_core ? "dual-core" : "single-core");
+      ImGui::TextColored(color, "Fastmem:%s  VLoader:%s", fastmem ? " on" : " off",
+                         software_vertex_loader ? " software" : " native");
+      ImGui::TextColored(color, "Bound: %s", bound);
+    }
+    ImGui::End();
+  }
+#endif
 
   ImGui::PopStyleVar(2);
 }

@@ -46,6 +46,9 @@ private:
   Common::Flag m_shutdown_requested{false};
   Common::Flag m_tried_graceful_shutdown{false};
 
+  // Edge-detects the overlay-cycle chord.
+  bool m_overlay_chord_latched = false;
+
   // Read by Host_RendererHasFocus from the CPU and GPU threads.
   std::atomic<bool> m_focused{true};
 

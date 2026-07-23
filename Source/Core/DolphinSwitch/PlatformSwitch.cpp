@@ -10,6 +10,7 @@
 #include "Core/IOS/IOS.h"
 #include "Core/IOS/STM/STM.h"
 #include "Core/System.h"
+#include "DolphinSwitch/PerformanceOverlaySwitch.h"
 #include "VideoCommon/Present.h"
 
 namespace
@@ -54,11 +55,19 @@ void PlatformSwitch::MainLoop()
 void PlatformSwitch::PollHostInput()
 {
   padUpdate(&m_pad);
+  const u64 buttons = padGetButtons(&m_pad);
 
   // TODO: Replace this chord with the in-game overlay menu once there is one to open.
   constexpr u64 exit_chord = HidNpadButton_Plus | HidNpadButton_Minus;
-  if ((padGetButtons(&m_pad) & exit_chord) == exit_chord)
+  if ((buttons & exit_chord) == exit_chord)
     RequestShutdown();
+
+  // Stick clicks are free currently.
+  constexpr u64 overlay_chord = HidNpadButton_StickL | HidNpadButton_StickR;
+  const bool overlay_held = (buttons & overlay_chord) == overlay_chord;
+  if (overlay_held && !m_overlay_chord_latched)
+    PerfOverlay::CycleLevel();
+  m_overlay_chord_latched = overlay_held;
 }
 
 void PlatformSwitch::PollOperationMode()

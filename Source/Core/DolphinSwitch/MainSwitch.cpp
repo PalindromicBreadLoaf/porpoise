@@ -27,6 +27,7 @@
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 #include "DolphinSwitch/GamePickerSwitch.h"
+#include "DolphinSwitch/PerformanceOverlaySwitch.h"
 #include "DolphinSwitch/PlatformSwitch.h"
 #include "UICommon/UICommon.h"
 #include "VideoCommon/VideoBackendBase.h"
@@ -99,6 +100,10 @@ void ApplyPlatformConfigOverrides()
   // The block cache's large entry point map wants 64 GiB of address space, which is twenty times
   // the application heap. There's no point even trying.
   Config::SetCurrent(Config::MAIN_LARGE_ENTRY_POINTS_MAP, false);
+
+  // The overlay toggles live in the CurrentRun layer too, so the user's chosen level has to be
+  // put back after every teardown.
+  PerfOverlay::ApplyCurrentLevel();
 }
 
 std::string RunGame(PadState& pad, const std::string& path)

@@ -4,6 +4,7 @@ add_executable(porpoise
   HorizonCompatSwitch.cpp
   HostSwitch.cpp
   MainSwitch.cpp
+  PerformanceOverlaySwitch.cpp
   PlatformSwitch.cpp
 )
 
