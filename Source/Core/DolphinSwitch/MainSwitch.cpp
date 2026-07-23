@@ -101,6 +101,11 @@ void ApplyPlatformConfigOverrides()
   // the application heap. There's no point even trying.
   Config::SetCurrent(Config::MAIN_LARGE_ENTRY_POINTS_MAP, false);
 
+  // The reserved fastmem arena needs two things Horizon does not provide.
+  // 1. Aliasing one physical allocation into the physical and logical guest views
+  // 2. A data-abort handler that can resume execution at a back-patched PC.
+  Config::SetCurrent(Config::MAIN_FASTMEM_ARENA, false);
+
   // The overlay toggles live in the CurrentRun layer too, so the user's chosen level has to be
   // put back after every teardown.
   PerfOverlay::ApplyCurrentLevel();
