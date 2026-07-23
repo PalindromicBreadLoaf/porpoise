@@ -740,6 +740,10 @@ if(ENABLE_VULKAN)
   target_link_libraries(core PUBLIC videovulkan)
 endif()
 
+if(ENABLE_DEKO3D)
+  target_link_libraries(core PUBLIC videodeko3d)
+endif()
+
 if(APPLE)
   target_link_libraries(core PUBLIC videometal)
 endif()

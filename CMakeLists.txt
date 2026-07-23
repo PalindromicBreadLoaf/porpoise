@@ -99,6 +99,7 @@ option(ENABLE_CUBEB "Enables Cubeb sound backend" ON)
 option(ENABLE_LLVM "Enables LLVM support, for disassembly" ON)
 option(ENABLE_TESTS "Enables building the unit tests" ON)
 option(ENABLE_VULKAN "Enables vulkan video backend" ON)
+option(ENABLE_DEKO3D "Enables the deko3d video backend" OFF)
 option(USE_DISCORD_PRESENCE "Enables Discord Rich Presence, show the current game on Discord" ON)
 option(USE_MGBA "Enables GBA controllers emulation using libmgba" ON)
 option(ENABLE_AUTOUPDATE "Enables support for automatic updates" ON)
@@ -497,6 +498,9 @@ if(PORPOISE)
   # Vulkan via NXVK.
   set(ENABLE_VULKAN 1)
 
+  # Deko3d
+  set(ENABLE_DEKO3D 1)
+
   set(ENABLE_LLVM 0)
   set(ENABLE_ANALYTICS 0)
   set(ENABLE_AUTOUPDATE 0)
@@ -711,6 +715,11 @@ if(ENABLE_VULKAN)
   if(PORPOISE)
     include(NXVK)
   endif()
+endif()
+
+if(ENABLE_DEKO3D)
+  add_definitions(-DHAS_DEKO3D)
+  include(Deko3D)
 endif()
 
 if(NOT (WIN32 AND _M_ARM_64) AND NOT PORPOISE)
