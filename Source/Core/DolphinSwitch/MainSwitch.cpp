@@ -109,6 +109,20 @@ void ApplyPlatformConfigOverrides()
   // 2. A data-abort handler that can resume execution at a back-patched PC.
   Config::SetCurrent(Config::MAIN_FASTMEM_ARENA, false);
 
+  // TegraX1 lacks the shader throughput for ubershaders.
+  // TODO: expose the skip-until-compiled tradeoff as a user-visible setting once a settings UI
+  // exists.
+  // NOTE: Currently enabling more than one of the below three settings causes a crash during gameplay.
+  // I don't know why, but it's something that desperately needs looked at.
+  // Keeping GPU Texture Decoding Enabled as that's the biggest performance gain.
+
+  //Config::SetCurrent(Config::GFX_SHADER_COMPILATION_MODE,
+  //                   ShaderCompilationMode::AsynchronousSkipRendering);
+  //Config::SetCurrent(Config::GFX_ENHANCE_MAX_ANISOTROPY, AnisotropicFilteringMode::Force1x);
+
+  // Do everything possible on the GPU to free as much CPU as possible.
+  Config::SetCurrent(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, true);
+
   // The overlay toggles live in the CurrentRun layer too, so the user's chosen level has to be
   // put back after every teardown.
   PerfOverlay::ApplyCurrentLevel();
