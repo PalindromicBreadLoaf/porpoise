@@ -241,6 +241,8 @@ endif()
 
 if(PORPOISE)
   target_sources(common PRIVATE
+    HostCodeMemory.h
+    HostCodeMemoryHorizon.cpp
     Logging/ConsoleListenerNix.cpp
     MemArenaHorizon.cpp
   )

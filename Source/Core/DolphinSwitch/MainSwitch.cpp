@@ -14,6 +14,7 @@
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
+#include "Common/HostCodeMemory.h"
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
 #include "Common/Thread.h"
@@ -85,20 +86,19 @@ void LogHostEnvironment()
 // be reapplied for every boot.
 void ApplyPlatformConfigOverrides()
 {
-  // DefaultCPUCore() is JITARM64 on AArch64, and AllocateExecutableMemory hands back nullptr here.
+  // Everything that emits host code shares one arena, so one failure covers all of them.
   // CachedInterpreter's code block is declared non-executable, so it allocates through
-  // AllocateMemoryPages and runs as-is.
-  // TODO: drop this override once the emitters can target host executable memory.
-  Config::SetCurrent(Config::MAIN_CPU_CORE, PowerPC::CPUCore::CachedInterpreter);
+  // AllocateMemoryPages and runs without any of this.
+  if (!Common::HostCodeMemory::IsAvailable())
+  {
+    WARN_LOG_FMT(COMMON, "No host code memory available. Falling back to the cached interpreter.");
+    Config::SetCurrent(Config::MAIN_CPU_CORE, PowerPC::CPUCore::CachedInterpreter);
+    Config::SetCurrent(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
+  }
 
   // The block cache's large entry point map wants 64 GiB of address space, which is twenty times
   // the application heap. There's no point even trying.
   Config::SetCurrent(Config::MAIN_LARGE_ENTRY_POINTS_MAP, false);
-
-  // TODO: The PowerPC core is not the only thing that emits host code. VertexLoaderARM64 takes
-  // AllocCodeSpace's null region and poisons it on construction, which faults on address 0 at
-  // the first draw.
-  Config::SetCurrent(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
 }
 
 std::string RunGame(PadState& pad, const std::string& path)
@@ -188,6 +188,10 @@ int main(int argc, char* argv[])
   Common::ScopeGuard ui_common_guard([] { UICommon::Shutdown(); });
 
   LogHostEnvironment();
+
+  // Reserved once for the whole session. Both JitArm64 and VertexLoaderARM64 carve out of this.
+  Common::HostCodeMemory::Init();
+  Common::ScopeGuard host_code_guard([] { Common::HostCodeMemory::Shutdown(); });
 
   std::string pending = argc > 1 && argv[1] != nullptr ? argv[1] : std::string{};
   std::string notice;

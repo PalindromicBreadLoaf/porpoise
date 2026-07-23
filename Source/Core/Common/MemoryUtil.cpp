@@ -17,6 +17,7 @@
 #elif defined(__SWITCH__)
 #include <stdio.h>
 #include <switch.h>
+#include "Common/HostCodeMemory.h"
 #else
 #include <stdio.h>
 #include <sys/mman.h>
@@ -46,11 +47,8 @@ void* AllocateExecutableMemory(size_t size)
 #if defined(_WIN32)
   void* ptr = VirtualAlloc(nullptr, size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 #elif defined(__SWITCH__)
-  // Horizon enforces W^X.
-  // Executable memory comes from libnx jitCreate as a writable alias plus a
-  // separate executable view, which the emitters do not yet know how to target.
-  // TODO: have emitters account for this.
-  void* ptr = nullptr;
+  HostCodeMemory::Init();
+  void* ptr = HostCodeMemory::Allocate(size);
 #else
   int map_flags = MAP_ANON | MAP_PRIVATE;
 #if defined(__APPLE__)
@@ -66,6 +64,16 @@ void* AllocateExecutableMemory(size_t size)
 
   return ptr;
 }
+
+void FreeExecutableMemory(void* ptr, size_t size)
+{
+#ifdef __SWITCH__
+  HostCodeMemory::Free(static_cast<u8*>(ptr));
+#else
+  FreeMemoryPages(ptr, size);
+#endif
+}
+
 // This function is used to provide a counter for the JITPageWrite*Execute*
 // functions to enable nesting. The static variable is wrapped in a a function
 // to allow those functions to be called inside of the constructor of a static

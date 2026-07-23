@@ -118,7 +118,7 @@ void ARM64XEmitter::Write32(u32 value)
     return;
   }
 
-  std::memcpy(m_code, &value, sizeof(u32));
+  std::memcpy(WritableAlias(m_code), &value, sizeof(u32));
   m_code += sizeof(u32);
 }
 
@@ -138,6 +138,8 @@ void ARM64XEmitter::FlushIcacheSection(u8* start, u8* end)
   sys_cache_control(kCacheFunctionPrepareForExecution, start, end - start);
 #elif defined(WIN32)
   FlushInstructionCache(GetCurrentProcess(), start, end - start);
+#elif defined(__SWITCH__)
+  Common::HostCodeMemory::FlushCode(start, end - start);
 #else
   // Don't rely on GCC's __clear_cache implementation, as it caches
   // icache/dcache cache line sizes, that can vary between cores on
@@ -730,7 +732,7 @@ void ARM64XEmitter::SetJumpTarget(FixupBranch const& branch)
     break;
   }
 
-  std::memcpy(branch.ptr, &inst, sizeof(inst));
+  std::memcpy(WritableAlias(branch.ptr), &inst, sizeof(inst));
 }
 
 FixupBranch ARM64XEmitter::WriteFixupBranch()

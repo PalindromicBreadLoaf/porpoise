@@ -40,12 +40,19 @@
 
 using namespace Arm64Gen;
 
+#ifdef __SWITCH__
+// Running out of code space only costs a cache flush.
+// TODO: benchmark this.
+constexpr size_t NEAR_CODE_SIZE = 1024 * 1024 * 12;
+constexpr size_t FAR_CODE_SIZE = 1024 * 1024 * 12;
+#else
 constexpr size_t NEAR_CODE_SIZE = 1024 * 1024 * 64;
 // We use a bigger farcode size for JitArm64 than Jit64, because JitArm64 always emits farcode
 // for the slow path of each loadstore instruction. Jit64 postpones emitting farcode until the
 // farcode actually is needed, saving it from having to emit farcode for most instructions.
 // TODO: Perhaps implement something similar to Jit64. But using more RAM isn't much of a problem.
 constexpr size_t FAR_CODE_SIZE = 1024 * 1024 * 64;
+#endif
 constexpr size_t TOTAL_CODE_SIZE = NEAR_CODE_SIZE * 2 + FAR_CODE_SIZE * 2;
 
 JitArm64::JitArm64(Core::System& system)

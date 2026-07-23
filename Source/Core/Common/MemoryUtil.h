@@ -9,6 +9,7 @@
 namespace Common
 {
 void* AllocateExecutableMemory(size_t size);
+void FreeExecutableMemory(void* ptr, size_t size);
 
 // These two functions control the executable/writable state of the W^X memory
 // allocations. More detailed documentation about them is in the .cpp file.

@@ -792,29 +792,33 @@ void JitArm64::GenerateQuantizedLoads()
 
   Common::JitRegister::Register(start, GetCodePtr(), "JIT_QuantizedLoad");
 
+  // These tables are data carved out of the code region rather than anything the emitter writes,
+  // so the fill has to be aliased by hand.
   paired_load_quantized = reinterpret_cast<const u8**>(AlignCode16());
   ReserveCodeSpace(8 * sizeof(u8*));
 
-  paired_load_quantized[0] = loadPairedFloatTwo;
-  paired_load_quantized[1] = loadPairedIllegal;
-  paired_load_quantized[2] = loadPairedIllegal;
-  paired_load_quantized[3] = loadPairedIllegal;
-  paired_load_quantized[4] = loadPairedU8Two;
-  paired_load_quantized[5] = loadPairedU16Two;
-  paired_load_quantized[6] = loadPairedS8Two;
-  paired_load_quantized[7] = loadPairedS16Two;
+  const u8** const paired_load_table = WritableAlias(paired_load_quantized);
+  paired_load_table[0] = loadPairedFloatTwo;
+  paired_load_table[1] = loadPairedIllegal;
+  paired_load_table[2] = loadPairedIllegal;
+  paired_load_table[3] = loadPairedIllegal;
+  paired_load_table[4] = loadPairedU8Two;
+  paired_load_table[5] = loadPairedU16Two;
+  paired_load_table[6] = loadPairedS8Two;
+  paired_load_table[7] = loadPairedS16Two;
 
   single_load_quantized = reinterpret_cast<const u8**>(AlignCode16());
   ReserveCodeSpace(8 * sizeof(u8*));
 
-  single_load_quantized[0] = loadPairedFloatOne;
-  single_load_quantized[1] = loadPairedIllegal;
-  single_load_quantized[2] = loadPairedIllegal;
-  single_load_quantized[3] = loadPairedIllegal;
-  single_load_quantized[4] = loadPairedU8One;
-  single_load_quantized[5] = loadPairedU16One;
-  single_load_quantized[6] = loadPairedS8One;
-  single_load_quantized[7] = loadPairedS16One;
+  const u8** const single_load_table = WritableAlias(single_load_quantized);
+  single_load_table[0] = loadPairedFloatOne;
+  single_load_table[1] = loadPairedIllegal;
+  single_load_table[2] = loadPairedIllegal;
+  single_load_table[3] = loadPairedIllegal;
+  single_load_table[4] = loadPairedU8One;
+  single_load_table[5] = loadPairedU16One;
+  single_load_table[6] = loadPairedS8One;
+  single_load_table[7] = loadPairedS16One;
 }
 
 void JitArm64::GenerateQuantizedStores()
@@ -1015,24 +1019,26 @@ void JitArm64::GenerateQuantizedStores()
   paired_store_quantized = reinterpret_cast<const u8**>(AlignCode16());
   ReserveCodeSpace(8 * sizeof(u8*));
 
-  paired_store_quantized[0] = storePairedFloat;
-  paired_store_quantized[1] = storePairedIllegal;
-  paired_store_quantized[2] = storePairedIllegal;
-  paired_store_quantized[3] = storePairedIllegal;
-  paired_store_quantized[4] = storePairedU8;
-  paired_store_quantized[5] = storePairedU16;
-  paired_store_quantized[6] = storePairedS8;
-  paired_store_quantized[7] = storePairedS16;
+  const u8** const paired_store_table = WritableAlias(paired_store_quantized);
+  paired_store_table[0] = storePairedFloat;
+  paired_store_table[1] = storePairedIllegal;
+  paired_store_table[2] = storePairedIllegal;
+  paired_store_table[3] = storePairedIllegal;
+  paired_store_table[4] = storePairedU8;
+  paired_store_table[5] = storePairedU16;
+  paired_store_table[6] = storePairedS8;
+  paired_store_table[7] = storePairedS16;
 
   single_store_quantized = reinterpret_cast<const u8**>(AlignCode16());
   ReserveCodeSpace(8 * sizeof(u8*));
 
-  single_store_quantized[0] = storeSingleFloat;
-  single_store_quantized[1] = storePairedIllegal;
-  single_store_quantized[2] = storePairedIllegal;
-  single_store_quantized[3] = storePairedIllegal;
-  single_store_quantized[4] = storeSingleU8;
-  single_store_quantized[5] = storeSingleU16;
-  single_store_quantized[6] = storeSingleS8;
-  single_store_quantized[7] = storeSingleS16;
+  const u8** const single_store_table = WritableAlias(single_store_quantized);
+  single_store_table[0] = storeSingleFloat;
+  single_store_table[1] = storePairedIllegal;
+  single_store_table[2] = storePairedIllegal;
+  single_store_table[3] = storePairedIllegal;
+  single_store_table[4] = storeSingleU8;
+  single_store_table[5] = storeSingleU16;
+  single_store_table[6] = storeSingleS8;
+  single_store_table[7] = storeSingleS16;
 }

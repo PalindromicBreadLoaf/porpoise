@@ -57,7 +57,17 @@ public:
       region = static_cast<u8*>(Common::AllocateExecutableMemory(total_region_size));
     else
       region = static_cast<u8*>(Common::AllocateMemoryPages(total_region_size));
-    T::SetCodePtr(region, region + size);
+
+    // The allocation is allowed to fail, and where host code memory is dual-mapped an empty region
+    // does not conveniently sit at address zero any more. Leave it zero so that poisoning
+    // writes nothing and reports a failure.
+    if (!region)
+    {
+      region_size = 0;
+      total_region_size = 0;
+    }
+
+    T::SetCodePtr(region, region + region_size);
   }
 
   // Always clear code space with breakpoints, so that if someone accidentally executes
@@ -72,7 +82,10 @@ public:
   void FreeCodeSpace()
   {
     ASSERT(!m_is_child);
-    Common::FreeMemoryPages(region, total_region_size);
+    if constexpr (executable)
+      Common::FreeExecutableMemory(region, total_region_size);
+    else
+      Common::FreeMemoryPages(region, total_region_size);
     region = nullptr;
     region_size = 0;
     total_region_size = 0;

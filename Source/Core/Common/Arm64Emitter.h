@@ -18,6 +18,7 @@
 #include "Common/CodeBlock.h"
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
+#include "Common/HostCodeMemory.h"
 #include "Common/MathUtil.h"
 #include "Common/SmallVector.h"
 
@@ -680,6 +681,18 @@ public:
   void SetCodePtr(u8* ptr, u8* end, bool write_failed = false);
 
   void SetCodePtrUnsafe(u8* ptr, u8* end, bool write_failed = false);
+
+  template <typename T>
+  static T* WritableAlias(T* ptr)
+  {
+#ifdef __SWITCH__
+    return reinterpret_cast<T*>(
+        Common::HostCodeMemory::WritableAlias(reinterpret_cast<const u8*>(ptr)));
+#else
+    return ptr;
+#endif
+  }
+
   const u8* GetCodePtr() const { return m_code; }
   u8* GetWritableCodePtr() { return m_code; }
   const u8* GetCodeEnd() const { return m_code_end; }
@@ -1488,7 +1501,7 @@ private:
 
     for (size_t i = 0; i < region_size; i += sizeof(u32))
     {
-      std::memcpy(region + i, &brk_0, sizeof(u32));
+      std::memcpy(WritableAlias(region + i), &brk_0, sizeof(u32));
     }
   }
 };
