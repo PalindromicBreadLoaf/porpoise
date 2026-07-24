@@ -476,6 +476,9 @@ if(PORPOISE)
   # Version of the port itself, independent of the Dolphin version it tracks.
   set(PORPOISE_VERSION "0.1.0")
 
+  # The CPU exception entry stub has to be assembly.
+  enable_language(ASM)
+
   # Everything Horizon cannot host.
   set(ENABLE_QT 0)
   set(ENABLE_NOGUI 0)

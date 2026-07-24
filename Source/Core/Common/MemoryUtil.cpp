@@ -225,7 +225,8 @@ bool ReadProtectMemory(void* ptr, size_t size)
     return false;
   }
 #elif defined(__SWITCH__)
-  // Guard pages simply are not enforced here.
+  // Horizon will not change the permission of a thread stack, so the JIT's BLR stack guard cannot be armed.
+  return false;
 #else
   if (mprotect(ptr, size, PROT_NONE) != 0)
   {

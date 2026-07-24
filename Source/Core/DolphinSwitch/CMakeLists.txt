@@ -2,6 +2,8 @@ add_executable(porpoise
   CrashHandlerSwitch.cpp
   GamePickerSwitch.cpp
   HorizonCompatSwitch.cpp
+  HorizonExceptionEntry.h
+  HorizonExceptionEntry.S
   HostSwitch.cpp
   MainSwitch.cpp
   PerformanceOverlaySwitch.cpp

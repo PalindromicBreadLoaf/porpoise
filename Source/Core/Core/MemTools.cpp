@@ -8,9 +8,14 @@
 #include "Common/CommonFuncs.h"
 #include "Common/MsgHandler.h"
 
+#include "Core/HW/Memmap.h"
 #include "Core/MachineContext.h"
 #include "Core/PowerPC/JitInterface.h"
 #include "Core/System.h"
+
+#ifdef __SWITCH__
+#include <atomic>
+#endif
 
 #if defined(__FreeBSD__) || defined(__NetBSD__)
 #include <signal.h>
@@ -249,6 +254,54 @@ void InstallExceptionHandler()
 
 void UninstallExceptionHandler()
 {
+}
+
+bool IsExceptionHandlerSupported()
+{
+  return true;
+}
+
+#elif defined(__SWITCH__)
+
+// ESR exception classes for a data abort taken from a lower or the current exception level.
+constexpr u32 ESR_EC_DATA_ABORT_LOWER = 0x24;
+constexpr u32 ESR_EC_DATA_ABORT_SAME = 0x25;
+
+static std::atomic<bool> s_handler_installed{false};
+
+// The faulting thread is frozen on a private stack. Returning true resumes it
+// at ctx->pc.
+extern "C" bool HorizonExceptionDispatch(SContext* ctx);
+
+extern "C" bool HorizonExceptionDispatch(SContext* ctx)
+{
+  if (!s_handler_installed.load(std::memory_order_acquire))
+    return false;
+
+  if (!threadExceptionIsAArch64(ctx))
+    return false;
+
+  const u32 exception_class = (ctx->esr >> 26) & 0x3F;
+  if (exception_class != ESR_EC_DATA_ABORT_LOWER && exception_class != ESR_EC_DATA_ABORT_SAME)
+    return false;
+
+  // Faults outside the arena are real crashes.
+  auto& system = Core::System::GetInstance();
+  const auto fault_address = static_cast<uintptr_t>(ctx->far.x);
+  if (!system.GetMemory().IsAddressInFastmemArea(reinterpret_cast<u8*>(fault_address)))
+    return false;
+
+  return system.GetJitInterface().HandleFault(fault_address, ctx);
+}
+
+void InstallExceptionHandler()
+{
+  s_handler_installed.store(true, std::memory_order_release);
+}
+
+void UninstallExceptionHandler()
+{
+  s_handler_installed.store(false, std::memory_order_release);
 }
 
 bool IsExceptionHandlerSupported()

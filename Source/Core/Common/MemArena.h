@@ -14,6 +14,10 @@
 #include "Common/CommonTypes.h"
 #include "Common/DynamicLibrary.h"
 
+#ifdef __SWITCH__
+struct VirtmemReservation;
+#endif
+
 namespace Common
 {
 #ifdef _WIN32
@@ -26,6 +30,14 @@ struct WindowsMemoryFunctions
   void* m_address_UnmapViewOfFileEx = nullptr;
   void* m_address_VirtualAlloc2 = nullptr;
   void* m_address_MapViewOfFile3 = nullptr;
+};
+#elif defined(__SWITCH__)
+// svcUnmapProcessMemory only accepts the exact triple svcMapProcessMemory was given.
+struct HorizonMemoryMapping
+{
+  u8* destination;
+  u8* source;
+  std::size_t size;
 };
 #endif
 
@@ -149,8 +161,17 @@ private:
   vm_address_t m_region_address = 0;
   vm_size_t m_region_size = 0;
 #elif defined(__SWITCH__)
+  // The heap allocation behind the segment. Unreachable while the segment is mapped.
+  // Is only kept so svcUnmapProcessCodeMemory can be handed it back.
+  void* m_shm_backing = nullptr;
   u8* m_shm_segment = nullptr;
   std::size_t m_shm_segment_size = 0;
+  ::VirtmemReservation* m_shm_reservation = nullptr;
+
+  u8* m_reserved_region = nullptr;
+  std::size_t m_reserved_region_size = 0;
+  ::VirtmemReservation* m_region_reservation = nullptr;
+  std::vector<HorizonMemoryMapping> m_mappings;
 #else
   int m_shm_fd = 0;
   void* m_reserved_region = nullptr;

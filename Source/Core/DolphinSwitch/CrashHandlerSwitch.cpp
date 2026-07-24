@@ -5,8 +5,11 @@
 // Horizon delivers CPU exceptions to a userland handler on a dedicated stack, with the faulting
 // thread frozen mid-fault. This is to safely dump the faulting thread to be able to diagnose
 // any crashes.
+//
+// This should only be called after nothing has claimed the fault.
 
 #include <cstdarg>
+#include <cstddef>
 #include <cstdio>
 
 #include <fcntl.h>
@@ -14,6 +17,34 @@
 #include <unistd.h>
 
 #include "Common/CommonPaths.h"
+#include "DolphinSwitch/HorizonExceptionEntry.h"
+
+// The entry stub fills the slot by hand.
+static_assert(sizeof(CpuRegister) == 8);
+static_assert(sizeof(FpuRegister) == 16);
+static_assert(offsetof(ThreadExceptionDump, error_desc) == DUMP_ERROR_DESC);
+static_assert(offsetof(ThreadExceptionDump, cpu_gprs) == DUMP_GPRS);
+static_assert(offsetof(ThreadExceptionDump, fp) == DUMP_FP);
+static_assert(offsetof(ThreadExceptionDump, lr) == DUMP_LR);
+static_assert(offsetof(ThreadExceptionDump, sp) == DUMP_SP);
+static_assert(offsetof(ThreadExceptionDump, pc) == DUMP_PC);
+static_assert(offsetof(ThreadExceptionDump, padding) == DUMP_PADDING);
+static_assert(offsetof(ThreadExceptionDump, fpu_gprs) == DUMP_FPU);
+static_assert(offsetof(ThreadExceptionDump, pstate) == DUMP_PSTATE);
+static_assert(offsetof(ThreadExceptionDump, far) == DUMP_FAR);
+static_assert(sizeof(ThreadExceptionDump) <= SLOT_FRAME);
+static_assert(SLOT_INDEX + sizeof(u64) <= SLOT_SIZE);
+
+// pstate, afsr0, afsr1 and esr are copied as one 16-byte pair, so they have to line up on both
+// sides.
+static_assert(offsetof(ThreadExceptionDump, esr) == DUMP_PSTATE + 12);
+static_assert(offsetof(ThreadExceptionFrameA64, esr) == FRAME_PSTATE + 12);
+
+static_assert(offsetof(ThreadExceptionFrameA64, lr) == FRAME_LR);
+static_assert(offsetof(ThreadExceptionFrameA64, sp) == FRAME_SP);
+static_assert(offsetof(ThreadExceptionFrameA64, elr_el1) == FRAME_PC);
+static_assert(offsetof(ThreadExceptionFrameA64, pstate) == FRAME_PSTATE);
+static_assert(offsetof(ThreadExceptionFrameA64, far) == FRAME_FAR);
 
 namespace
 {
@@ -86,9 +117,6 @@ const char* DescribeError(u32 error_desc)
 // pc turns the dump into something addr2line can resolve against porpoise.elf.
 extern "C" void _start();
 
-alignas(16) u8 __nx_exception_stack[0x2000];
-u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
-
 extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx);
 
 extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx)
@@ -154,4 +182,40 @@ extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx)
   // Returning from here resumes the faulting instruction and loops forever.
   // Instead, exit to prevent a hang.
   svcExitProcess();
+}
+
+// Overrides newlib's abort
+//
+// newlib's abort() calls exit(), so a library that aborts on one thread runs libnx's __appExit on
+// that thread and closes hid, fs, applet and sm while every other thread is still using them. The
+// next thread to call into one of those aborts inside libnx, and since it is the second abort that
+// reaches the kernel, that is the thread the crash report describes. The original one is gone by
+// then, along with any indication that it ever existed, which makes debugging incredible annoying.
+// Breaking, instead freezes every thread where it stands, so the report is of the abort that actually happened.
+extern "C" void abort()
+{
+  const int fd = open(CRASH_LOG_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+  DumpWriter out(fd);
+
+  const u64 module_base = reinterpret_cast<u64>(&_start);
+  const u64 caller = reinterpret_cast<u64>(__builtin_return_address(0));
+
+  out.Printf("porpoise aborted. Something called abort().\n");
+  if (caller >= module_base)
+    out.Printf("abort called from +%lx  (aarch64-none-elf-addr2line -e porpoise.elf)\n",
+               caller - module_base);
+  out.Printf("module base %016lx\n", module_base);
+  out.Printf("The break below is what the crash report describes. Its crashed thread is the one "
+             "that aborted, and its stack trace is where the reason is.\n");
+
+  if (fd >= 0)
+  {
+    (void)fsync(fd);
+    (void)close(fd);
+  }
+
+  (void)fsdevCommitDevice("sdmc");
+
+  svcBreak(BreakReason_Panic, 0, 0);
+  __builtin_unreachable();
 }

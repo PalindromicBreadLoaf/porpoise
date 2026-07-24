@@ -14,6 +14,7 @@
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
+#include "Common/HorizonFastmem.h"
 #include "Common/HostCodeMemory.h"
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
@@ -104,23 +105,20 @@ void ApplyPlatformConfigOverrides()
   // the application heap. There's no point even trying.
   Config::SetCurrent(Config::MAIN_LARGE_ENTRY_POINTS_MAP, false);
 
-  // The reserved fastmem arena needs two things Horizon does not provide.
-  // 1. Aliasing one physical allocation into the physical and logical guest views
-  // 2. A data-abort handler that can resume execution at a back-patched PC.
-  Config::SetCurrent(Config::MAIN_FASTMEM_ARENA, false);
+  const bool fastmem_arena = Common::HorizonFastmem::IsArenaSupported();
+  Config::SetCurrent(Config::MAIN_FASTMEM_ARENA, fastmem_arena);
+
+  // Page table fastmem additionally needs mappings where reads succeed and writes fault.
+  Config::SetCurrent(Config::MAIN_PAGE_TABLE_FASTMEM,
+                     fastmem_arena && Common::HorizonFastmem::AreReadOnlyMappingsSupported());
 
   // TegraX1 lacks the shader throughput for ubershaders.
   // TODO: expose the skip-until-compiled tradeoff as a user-visible setting once a settings UI
   // exists.
-  // NOTE: Currently enabling more than one of the below three settings causes a crash during gameplay.
-  // I don't know why, but it's something that desperately needs looked at.
-  // Keeping GPU Texture Decoding Enabled as that's the biggest performance gain.
+  Config::SetCurrent(Config::GFX_SHADER_COMPILATION_MODE,
+                     ShaderCompilationMode::AsynchronousSkipRendering);
+  Config::SetCurrent(Config::GFX_ENHANCE_MAX_ANISOTROPY, AnisotropicFilteringMode::Force1x);
 
-  //Config::SetCurrent(Config::GFX_SHADER_COMPILATION_MODE,
-  //                   ShaderCompilationMode::AsynchronousSkipRendering);
-  //Config::SetCurrent(Config::GFX_ENHANCE_MAX_ANISOTROPY, AnisotropicFilteringMode::Force1x);
-
-  // Do everything possible on the GPU to free as much CPU as possible.
   Config::SetCurrent(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, true);
 
   // The overlay toggles live in the CurrentRun layer too, so the user's chosen level has to be
