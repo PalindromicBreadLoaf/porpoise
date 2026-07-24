@@ -37,15 +37,15 @@ bool DKGfx::IsHeadless() const
 }
 
 std::unique_ptr<AbstractTexture> DKGfx::CreateTexture(const TextureConfig& config,
-                                                      std::string_view /*name*/)
+                                                      std::string_view name)
 {
-  return std::make_unique<DKTexture>(config);
+  return DKTexture::Create(config, name);
 }
 
 std::unique_ptr<AbstractStagingTexture> DKGfx::CreateStagingTexture(StagingTextureType type,
                                                                     const TextureConfig& config)
 {
-  return std::make_unique<DKStagingTexture>(type, config);
+  return DKStagingTexture::Create(type, config);
 }
 
 std::unique_ptr<AbstractFramebuffer>
