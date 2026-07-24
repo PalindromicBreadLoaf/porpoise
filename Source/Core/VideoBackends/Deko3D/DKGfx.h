@@ -61,10 +61,6 @@ private:
   std::unique_ptr<DKSwapChain> m_swap_chain;
   float m_backbuffer_scale;
 
-  // TODO: this single scratch command buffer clears and presents the backbuffer. A per-frame ring
-  // with fences replaces it once the draw path is wired up.
-  dk::UniqueMemBlock m_cmdbuf_memblock;
-  dk::UniqueCmdBuf m_cmdbuf;
   int m_current_slot = -1;
 };
 }  // namespace Deko3D

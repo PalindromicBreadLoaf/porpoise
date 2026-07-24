@@ -7,6 +7,7 @@
 #include "Common/MsgHandler.h"
 
 #include "VideoBackends/Deko3D/DKBoundingBox.h"
+#include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
 #include "VideoBackends/Deko3D/DKGfx.h"
 #include "VideoBackends/Deko3D/DKPerfQuery.h"
@@ -76,6 +77,14 @@ bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
     return false;
   }
 
+  g_dk_command_buffer_mgr = std::make_unique<DKCommandBufferManager>();
+  if (!g_dk_command_buffer_mgr->Initialize())
+  {
+    PanicAlertFmt("Failed to create deko3d command buffers.");
+    Shutdown();
+    return false;
+  }
+
   UpdateActiveConfig();
 
   std::unique_ptr<DKSwapChain> swap_chain;
@@ -106,6 +115,7 @@ void VideoBackend::Shutdown()
 
   ShutdownShared();
 
+  g_dk_command_buffer_mgr.reset();
   g_dk_context.reset();
 }
 }  // namespace Deko3D
