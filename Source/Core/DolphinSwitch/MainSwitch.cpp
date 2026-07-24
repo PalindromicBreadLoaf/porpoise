@@ -81,7 +81,19 @@ void LogHostEnvironment()
                  total_memory / 0x100000);
   NOTICE_LOG_FMT(COMMON, "User directory {}", File::GetUserPath(D_USER_IDX));
   NOTICE_LOG_FMT(COMMON, "Sys directory {}", File::GetSysDirectory());
-  NOTICE_LOG_FMT(COMMON, "Video backend {}", VideoBackendBase::GetDefaultBackendDisplayName());
+
+  // Properly log the current backend name.
+  const std::string gfx_backend = Config::Get(Config::MAIN_GFX_BACKEND);
+  std::string backend_name = VideoBackendBase::GetDefaultBackendDisplayName();
+  for (const auto& backend : VideoBackendBase::GetAvailableBackends())
+  {
+    if (backend->GetConfigName() == gfx_backend)
+    {
+      backend_name = backend->GetDisplayName();
+      break;
+    }
+  }
+  NOTICE_LOG_FMT(COMMON, "Video backend {}", backend_name);
 }
 
 // BootManager::RestoreConfig() clears the CurrentRun layer when emulation ends, so these have to
