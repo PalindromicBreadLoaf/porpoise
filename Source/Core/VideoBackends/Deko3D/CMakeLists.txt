@@ -13,7 +13,9 @@ add_library(videodeko3d
   DKGfx.h
   DKMain.cpp
   DKPerfQuery.h
+  DKPipeline.cpp
   DKPipeline.h
+  DKShader.cpp
   DKShader.h
   DKStreamBuffer.cpp
   DKStreamBuffer.h
@@ -21,6 +23,8 @@ add_library(videodeko3d
   DKSwapChain.h
   DKTexture.cpp
   DKTexture.h
+  DKVertexFormat.cpp
+  DKVertexFormat.h
   DKVertexManager.cpp
   DKVertexManager.h
   VideoBackend.h

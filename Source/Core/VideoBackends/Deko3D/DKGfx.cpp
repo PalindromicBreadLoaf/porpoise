@@ -12,6 +12,7 @@
 #include "VideoBackends/Deko3D/DKShader.h"
 #include "VideoBackends/Deko3D/DKSwapChain.h"
 #include "VideoBackends/Deko3D/DKTexture.h"
+#include "VideoBackends/Deko3D/DKVertexFormat.h"
 
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/VideoConfig.h"
@@ -62,28 +63,27 @@ DKGfx::CreateShaderFromSource(ShaderStage stage, std::string_view /*source*/,
                               VideoCommon::ShaderIncluder* /*shader_includer*/,
                               std::string_view /*name*/)
 {
+  // TODO: deko3d accepts only DKSH.
   return std::make_unique<DKShader>(stage);
 }
 
-std::unique_ptr<AbstractShader> DKGfx::CreateShaderFromBinary(ShaderStage stage,
-                                                              const void* /*data*/,
-                                                              size_t /*length*/,
-                                                              std::string_view /*name*/)
+std::unique_ptr<AbstractShader> DKGfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
+                                                              size_t length, std::string_view name)
 {
-  return std::make_unique<DKShader>(stage);
+  return DKShader::CreateFromBinary(stage, data, length, name);
 }
 
 std::unique_ptr<NativeVertexFormat>
 DKGfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
 {
-  return std::make_unique<NativeVertexFormat>(vtx_decl);
+  return std::make_unique<DKVertexFormat>(vtx_decl);
 }
 
-std::unique_ptr<AbstractPipeline> DKGfx::CreatePipeline(const AbstractPipelineConfig& /*config*/,
+std::unique_ptr<AbstractPipeline> DKGfx::CreatePipeline(const AbstractPipelineConfig& config,
                                                         const void* /*cache_data*/,
                                                         size_t /*cache_data_length*/)
 {
-  return std::make_unique<DKPipeline>();
+  return DKPipeline::Create(config);
 }
 
 void DKGfx::Flush()

@@ -22,4 +22,7 @@ constexpr u32 DRAW_COMMAND_BUFFER_SIZE = 256 * 1024;
 
 // Size of each additional slice handed to a command buffer that runs out of space.
 constexpr u32 COMMAND_BUFFER_GROWTH_SIZE = 256 * 1024;
+
+// Maximum number of vertex attributes, matching the Vulkan backend.
+constexpr u32 MAX_VERTEX_ATTRIBUTES = 16;
 }  // namespace Deko3D

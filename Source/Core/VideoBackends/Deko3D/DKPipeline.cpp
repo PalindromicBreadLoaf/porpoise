@@ -1,0 +1,302 @@
+// Copyright 2026 Dolphin Emulator Project
+// Copyright 2026 PalindromicBreadLoaf (palindromicbreadloaf@tuta.com)
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#include "VideoBackends/Deko3D/DKPipeline.h"
+
+#include <array>
+
+#include "Common/Assert.h"
+#include "Common/EnumMap.h"
+#include "Common/Logging/Log.h"
+
+#include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKShader.h"
+#include "VideoBackends/Deko3D/DKVertexFormat.h"
+
+#include "VideoCommon/BPMemory.h"
+#include "VideoCommon/VideoConfig.h"
+
+namespace Deko3D
+{
+namespace
+{
+// The captured state block is tiny, but leave generous headroom.
+constexpr u32 MAX_CAPTURE_WORDS = 1024;
+
+DkMsMode GetDkMsMode(u32 samples)
+{
+  switch (samples)
+  {
+  case 2:
+    return DkMsMode_2x;
+  case 4:
+    return DkMsMode_4x;
+  case 8:
+    return DkMsMode_8x;
+  case 1:
+  default:
+    return DkMsMode_1x;
+  }
+}
+
+DkPrimitive GetDkPrimitive(PrimitiveType type)
+{
+  static constexpr std::array<DkPrimitive, 4> primitives = {
+      DkPrimitive_Points, DkPrimitive_Lines, DkPrimitive_Triangles, DkPrimitive_TriangleStrip};
+  return primitives[static_cast<u32>(type)];
+}
+
+DkRasterizerState GetRasterizerState(const RasterizationState& state)
+{
+  static constexpr std::array<DkFace, 4> cull_modes = {DkFace_None, DkFace_Back, DkFace_Front,
+                                                       DkFace_FrontAndBack};
+
+  DkRasterizerState raster;
+  dkRasterizerStateDefaults(&raster);
+  raster.depthClampEnable = g_backend_info.bSupportsDepthClamp ? 1 : 0;
+  raster.polygonModeFront = DkPolygonMode_Fill;
+  raster.polygonModeBack = DkPolygonMode_Fill;
+  raster.cullMode = cull_modes[static_cast<u32>(state.cull_mode.Value())];
+  raster.frontFace = DkFrontFace_CW;  // Matches the Vulkan backend's VK_FRONT_FACE_CLOCKWISE.
+  return raster;
+}
+
+DkMultisampleState GetMultisampleState(const FramebufferState& state)
+{
+  DkMultisampleState multisample;
+  dkMultisampleStateDefaults(&multisample);
+  multisample.mode = GetDkMsMode(state.samples);
+  multisample.rasterizerMode = multisample.mode;
+  return multisample;
+}
+
+DkDepthStencilState GetDepthStencilState(const DepthState& state)
+{
+  // Less/greater are swapped when depth is not reversed, matching the Vulkan backend.
+  const bool inverted_depth = !g_backend_info.bSupportsReversedDepthRange;
+  DkCompareOp compare_op;
+  switch (state.func)
+  {
+  case CompareMode::Never:
+    compare_op = DkCompareOp_Never;
+    break;
+  case CompareMode::Less:
+    compare_op = inverted_depth ? DkCompareOp_Greater : DkCompareOp_Less;
+    break;
+  case CompareMode::Equal:
+    compare_op = DkCompareOp_Equal;
+    break;
+  case CompareMode::LEqual:
+    compare_op = inverted_depth ? DkCompareOp_Gequal : DkCompareOp_Lequal;
+    break;
+  case CompareMode::Greater:
+    compare_op = inverted_depth ? DkCompareOp_Less : DkCompareOp_Greater;
+    break;
+  case CompareMode::NEqual:
+    compare_op = DkCompareOp_NotEqual;
+    break;
+  case CompareMode::GEqual:
+    compare_op = inverted_depth ? DkCompareOp_Lequal : DkCompareOp_Gequal;
+    break;
+  case CompareMode::Always:
+  default:
+    compare_op = DkCompareOp_Always;
+    break;
+  }
+
+  DkDepthStencilState depth_stencil;
+  dkDepthStencilStateDefaults(&depth_stencil);
+  depth_stencil.depthTestEnable = state.test_enable;
+  depth_stencil.depthWriteEnable = state.update_enable;
+  depth_stencil.stencilTestEnable = 0;
+  depth_stencil.depthCompareOp = compare_op;
+  return depth_stencil;
+}
+
+DkColorState GetColorState(const BlendingState& state, u32 num_attachments)
+{
+  DkColorState color;
+  dkColorStateDefaults(&color);
+
+  color.blendEnableMask = 0;
+  if (state.blend_enable)
+  {
+    for (u32 i = 0; i < num_attachments; i++)
+      color.blendEnableMask |= 1u << i;
+  }
+
+  const bool logic_op_enable = state.logic_op_enable && g_backend_info.bSupportsLogicOp;
+  // Dolphin's LogicOp values are numbered identically to DkLogicOp.
+  color.logicOp = logic_op_enable ?
+                      static_cast<DkLogicOp>(static_cast<u32>(state.logic_mode.Value())) :
+                      DkLogicOp_Copy;
+
+  // The alpha test is emulated in the fragment shader.
+  color.alphaCompareOp = DkCompareOp_Always;
+  return color;
+}
+
+DkColorWriteState GetColorWriteState(const BlendingState& state, u32 num_attachments)
+{
+  u32 mask = 0;
+  if (state.color_update)
+    mask |= DkColorMask_RGB;
+  if (state.alpha_update)
+    mask |= DkColorMask_A;
+
+  DkColorWriteState color_write;
+  dkColorWriteStateDefaults(&color_write);
+  color_write.masks = 0;
+  for (u32 i = 0; i < num_attachments; i++)
+    dkColorWriteStateSetMask(&color_write, i, mask);
+  return color_write;
+}
+
+DkBlendFactor GetSrcFactor(SrcBlendFactor factor, bool dual_source)
+{
+  static constexpr Common::EnumMap<DkBlendFactor, SrcBlendFactor::InvDstAlpha> factors{
+      DkBlendFactor_Zero,        DkBlendFactor_One,         DkBlendFactor_DstColor,
+      DkBlendFactor_InvDstColor, DkBlendFactor_SrcAlpha,    DkBlendFactor_InvSrcAlpha,
+      DkBlendFactor_DstAlpha,    DkBlendFactor_InvDstAlpha,
+  };
+  static constexpr Common::EnumMap<DkBlendFactor, SrcBlendFactor::InvDstAlpha> dual_factors{
+      DkBlendFactor_Zero,        DkBlendFactor_One,         DkBlendFactor_DstColor,
+      DkBlendFactor_InvDstColor, DkBlendFactor_Src1Alpha,   DkBlendFactor_InvSrc1Alpha,
+      DkBlendFactor_DstAlpha,    DkBlendFactor_InvDstAlpha,
+  };
+  return dual_source ? dual_factors[factor] : factors[factor];
+}
+
+DkBlendFactor GetDstFactor(DstBlendFactor factor, bool dual_source)
+{
+  static constexpr Common::EnumMap<DkBlendFactor, DstBlendFactor::InvDstAlpha> factors{
+      DkBlendFactor_Zero,        DkBlendFactor_One,         DkBlendFactor_SrcColor,
+      DkBlendFactor_InvSrcColor, DkBlendFactor_SrcAlpha,    DkBlendFactor_InvSrcAlpha,
+      DkBlendFactor_DstAlpha,    DkBlendFactor_InvDstAlpha,
+  };
+  static constexpr Common::EnumMap<DkBlendFactor, DstBlendFactor::InvDstAlpha> dual_factors{
+      DkBlendFactor_Zero,        DkBlendFactor_One,         DkBlendFactor_SrcColor,
+      DkBlendFactor_InvSrcColor, DkBlendFactor_Src1Alpha,   DkBlendFactor_InvSrc1Alpha,
+      DkBlendFactor_DstAlpha,    DkBlendFactor_InvDstAlpha,
+  };
+  return dual_source ? dual_factors[factor] : factors[factor];
+}
+
+DkBlendState GetBlendState(const BlendingState& state)
+{
+  const bool dual_source = state.use_dual_src;
+
+  DkBlendState blend;
+  dkBlendStateDefaults(&blend);
+  blend.colorBlendOp = state.subtract ? DkBlendOp_RevSub : DkBlendOp_Add;
+  blend.alphaBlendOp = state.subtract_alpha ? DkBlendOp_RevSub : DkBlendOp_Add;
+  blend.srcColorBlendFactor = GetSrcFactor(state.src_factor, dual_source);
+  blend.dstColorBlendFactor = GetDstFactor(state.dst_factor, dual_source);
+  blend.srcAlphaBlendFactor = GetSrcFactor(state.src_factor_alpha, dual_source);
+  blend.dstAlphaBlendFactor = GetDstFactor(state.dst_factor_alpha, dual_source);
+  return blend;
+}
+}  // namespace
+
+DKPipeline::DKPipeline(const AbstractPipelineConfig& config, std::vector<u32> replay_words,
+                       DkPrimitive primitive)
+    : AbstractPipeline(config), m_replay_words(std::move(replay_words)), m_primitive(primitive)
+{
+}
+
+DKPipeline::~DKPipeline() = default;
+
+void DKPipeline::Replay(DkCmdBuf cmdbuf) const
+{
+  dkCmdBufReplayCmds(cmdbuf, m_replay_words.data(), static_cast<u32>(m_replay_words.size()));
+}
+
+std::unique_ptr<DKPipeline> DKPipeline::Create(const AbstractPipelineConfig& config)
+{
+  DEBUG_ASSERT(config.vertex_shader && config.pixel_shader);
+
+  const u32 num_attachments =
+      1 + static_cast<u32>(config.framebuffer_state.additional_color_attachment_count);
+
+  const DkRasterizerState raster = GetRasterizerState(config.rasterization_state);
+  const DkMultisampleState multisample = GetMultisampleState(config.framebuffer_state);
+  const DkColorState color = GetColorState(config.blending_state, num_attachments);
+  const DkColorWriteState color_write = GetColorWriteState(config.blending_state, num_attachments);
+  const DkDepthStencilState depth_stencil = GetDepthStencilState(config.depth_state);
+
+  // Every attachment currently shares the same blend state, matching the Vulkan backend.
+  const std::vector<DkBlendState> blend_states(num_attachments,
+                                               GetBlendState(config.blending_state));
+
+  const auto* vertex_shader = static_cast<const DKShader*>(config.vertex_shader);
+  const auto* geometry_shader = static_cast<const DKShader*>(config.geometry_shader);
+  const auto* pixel_shader = static_cast<const DKShader*>(config.pixel_shader);
+
+  const DkPrimitive primitive = GetDkPrimitive(config.rasterization_state.primitive.Value());
+
+  // Until a GLSL->DKSH compiler exists, shaders created from source carry no DkShader.
+  if (!vertex_shader->IsValid() || !pixel_shader->IsValid() ||
+      (geometry_shader && !geometry_shader->IsValid()))
+  {
+    return std::make_unique<DKPipeline>(config, std::vector<u32>{}, primitive);
+  }
+
+  // Shaders.
+  std::vector<const DkShader*> shaders;
+  u32 stage_mask = 0;
+  shaders.push_back(vertex_shader->GetShader());
+  stage_mask |= DkStageFlag_Vertex;
+  if (geometry_shader)
+  {
+    shaders.push_back(geometry_shader->GetShader());
+    stage_mask |= DkStageFlag_Geometry;
+  }
+  shaders.push_back(pixel_shader->GetShader());
+  stage_mask |= DkStageFlag_Fragment;
+
+  const auto* vertex_format = static_cast<const DKVertexFormat*>(config.vertex_format);
+  const std::array<DkVtxBufferState, 1> buffer_states = {
+      vertex_format ? vertex_format->GetBufferState() : DkVtxBufferState{}};
+
+  const bool primitive_restart =
+      g_backend_info.bSupportsPrimitiveRestart && primitive == DkPrimitive_TriangleStrip;
+
+  // Capture the state block into raw command words.
+  // TODO: share one scratch command buffer across pipeline creation instead of allocating per call.
+  DkDevice device = g_dk_context->GetDevice();
+  dk::UniqueMemBlock scratch_block =
+      dk::MemBlockMaker{device, DK_MEMBLOCK_ALIGNMENT}
+          .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached)
+          .create();
+  dk::UniqueCmdBuf scratch = dk::CmdBufMaker{device}.create();
+  if (!scratch_block || !scratch)
+  {
+    PanicAlertFmt("deko3d: failed to allocate scratch resources for pipeline capture");
+    return nullptr;
+  }
+  scratch.addMemory(scratch_block, 0, DK_MEMBLOCK_ALIGNMENT);
+
+  std::vector<u32> storage(MAX_CAPTURE_WORDS);
+  scratch.beginCaptureCmds(storage.data(), static_cast<u32>(storage.size()));
+
+  scratch.bindShaders(stage_mask, shaders);
+  scratch.bindRasterizerState(raster);
+  scratch.bindMultisampleState(multisample);
+  scratch.bindColorState(color);
+  scratch.bindColorWriteState(color_write);
+  scratch.bindBlendStates(0, blend_states);
+  scratch.bindDepthStencilState(depth_stencil);
+  if (vertex_format)
+  {
+    scratch.bindVtxAttribState(vertex_format->GetAttributes());
+    scratch.bindVtxBufferState(buffer_states);
+  }
+  scratch.setPrimitiveRestart(primitive_restart, 0xFFFF);
+
+  const u32 num_words = scratch.endCaptureCmds();
+  storage.resize(num_words);
+
+  return std::make_unique<DKPipeline>(config, std::move(storage), primitive);
+}
+}  // namespace Deko3D
