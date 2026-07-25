@@ -2,7 +2,11 @@
 # Copyright 2026 PalindromicBreadLoaf (palindromicbreadloaf@tuta.com)
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-option(DEKO3D_DEBUG "Link the debug build of deko3d" ON)
+set(_deko3d_debug_default OFF)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(_deko3d_debug_default ON)
+endif()
+option(DEKO3D_DEBUG "Link the debug build of deko3d" ${_deko3d_debug_default})
 
 set(DEKO3D_INCLUDE_DIR "${DEVKITPRO}/libnx/include")
 set(DEKO3D_LIB_DIR "${DEVKITPRO}/libnx/lib")

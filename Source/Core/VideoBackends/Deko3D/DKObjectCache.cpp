@@ -11,6 +11,7 @@
 #include "Common/Logging/Log.h"
 
 #include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKStreamBuffer.h"
 
 namespace Deko3D
 {
@@ -44,6 +45,25 @@ bool DKObjectCache::Initialize()
 
   m_descriptors = static_cast<DkSamplerDescriptor*>(m_descriptor_block.getCpuAddr());
   m_descriptor_set_addr = m_descriptor_block.getGpuAddr();
+
+  m_texture_upload_buffer = DKStreamBuffer::Create(TEXTURE_UPLOAD_BUFFER_SIZE);
+  if (!m_texture_upload_buffer)
+  {
+    ERROR_LOG_FMT(VIDEO, "deko3d: failed to allocate the texture upload ring");
+    return false;
+  }
+
+  m_pipeline_capture_memblock =
+      dk::MemBlockMaker{g_dk_context->GetDevice(), DK_MEMBLOCK_ALIGNMENT}
+          .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached)
+          .create();
+  m_pipeline_capture_cmdbuf = dk::CmdBufMaker{g_dk_context->GetDevice()}.create();
+  if (!m_pipeline_capture_memblock || !m_pipeline_capture_cmdbuf)
+  {
+    ERROR_LOG_FMT(VIDEO, "deko3d: failed to allocate pipeline capture resources");
+    return false;
+  }
+  m_pipeline_capture_cmdbuf.addMemory(m_pipeline_capture_memblock, 0, DK_MEMBLOCK_ALIGNMENT);
 
   // Slot 0 is the point sampler, used for every binding that has no state of its own yet.
   dk::Sampler point_sampler;

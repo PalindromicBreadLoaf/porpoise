@@ -5,12 +5,12 @@
 #include "VideoBackends/Deko3D/DKPipeline.h"
 
 #include <array>
+#include <mutex>
 
 #include "Common/Assert.h"
 #include "Common/EnumMap.h"
-#include "Common/Logging/Log.h"
 
-#include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKObjectCache.h"
 #include "VideoBackends/Deko3D/DKShader.h"
 #include "VideoBackends/Deko3D/DKVertexFormat.h"
 
@@ -52,19 +52,22 @@ DkRasterizerState GetRasterizerState(const RasterizationState& state)
   static constexpr std::array<DkFace, 4> cull_modes = {DkFace_None, DkFace_Back, DkFace_Front,
                                                        DkFace_FrontAndBack};
 
-  DkRasterizerState raster;
+  // Anonymous padding bits in deko3d state structs are consumed by the hardware on some methods.
+  // The Defaults helpers only assign named fields, so zero the complete object first.
+  DkRasterizerState raster{};
   dkRasterizerStateDefaults(&raster);
   raster.depthClampEnable = g_backend_info.bSupportsDepthClamp ? 1 : 0;
   raster.polygonModeFront = DkPolygonMode_Fill;
   raster.polygonModeBack = DkPolygonMode_Fill;
   raster.cullMode = cull_modes[static_cast<u32>(state.cull_mode.Value())];
-  raster.frontFace = DkFrontFace_CW;  // Matches the Vulkan backend's VK_FRONT_FACE_CLOCKWISE.
+  // Vulkan shader generation and the viewport swizzle each flip Y.
+  raster.frontFace = DkFrontFace_CW;
   return raster;
 }
 
 DkMultisampleState GetMultisampleState(const FramebufferState& state)
 {
-  DkMultisampleState multisample;
+  DkMultisampleState multisample{};
   dkMultisampleStateDefaults(&multisample);
   multisample.mode = GetDkMsMode(state.samples);
   multisample.rasterizerMode = multisample.mode;
@@ -105,7 +108,7 @@ DkDepthStencilState GetDepthStencilState(const DepthState& state)
     break;
   }
 
-  DkDepthStencilState depth_stencil;
+  DkDepthStencilState depth_stencil{};
   dkDepthStencilStateDefaults(&depth_stencil);
   depth_stencil.depthTestEnable = state.test_enable;
   depth_stencil.depthWriteEnable = state.update_enable;
@@ -116,7 +119,7 @@ DkDepthStencilState GetDepthStencilState(const DepthState& state)
 
 DkColorState GetColorState(const BlendingState& state, u32 num_attachments)
 {
-  DkColorState color;
+  DkColorState color{};
   dkColorStateDefaults(&color);
 
   color.blendEnableMask = 0;
@@ -145,7 +148,7 @@ DkColorWriteState GetColorWriteState(const BlendingState& state, u32 num_attachm
   if (state.alpha_update)
     mask |= DkColorMask_A;
 
-  DkColorWriteState color_write;
+  DkColorWriteState color_write{};
   dkColorWriteStateDefaults(&color_write);
   color_write.masks = 0;
   for (u32 i = 0; i < num_attachments; i++)
@@ -187,7 +190,7 @@ DkBlendState GetBlendState(const BlendingState& state)
 {
   const bool dual_source = state.use_dual_src;
 
-  DkBlendState blend;
+  DkBlendState blend{};
   dkBlendStateDefaults(&blend);
   blend.colorBlendOp = state.subtract ? DkBlendOp_RevSub : DkBlendOp_Add;
   blend.alphaBlendOp = state.subtract_alpha ? DkBlendOp_RevSub : DkBlendOp_Add;
@@ -201,9 +204,9 @@ DkBlendState GetBlendState(const BlendingState& state)
 
 DKPipeline::DKPipeline(const AbstractPipelineConfig& config, std::vector<u32> replay_words,
                        std::vector<std::shared_ptr<DKShaderCode>> shader_code,
-                       DkPrimitive primitive)
+                       DkPrimitive primitive, u32 stage_mask)
     : AbstractPipeline(config), m_replay_words(std::move(replay_words)),
-      m_shader_code(std::move(shader_code)), m_primitive(primitive)
+      m_shader_code(std::move(shader_code)), m_primitive(primitive), m_stage_mask(stage_mask)
 {
 }
 
@@ -242,7 +245,7 @@ std::unique_ptr<DKPipeline> DKPipeline::Create(const AbstractPipelineConfig& con
       (geometry_shader && !geometry_shader->IsValid()))
   {
     return std::make_unique<DKPipeline>(config, std::vector<u32>{},
-                                        std::vector<std::shared_ptr<DKShaderCode>>{}, primitive);
+                                        std::vector<std::shared_ptr<DKShaderCode>>{}, primitive, 0);
   }
 
   // Shaders.
@@ -269,42 +272,32 @@ std::unique_ptr<DKPipeline> DKPipeline::Create(const AbstractPipelineConfig& con
   const bool primitive_restart =
       g_backend_info.bSupportsPrimitiveRestart && primitive == DkPrimitive_TriangleStrip;
 
-  // Capture the state block into raw command words.
-  // TODO: share one scratch command buffer across pipeline creation instead of allocating per call.
-  DkDevice device = g_dk_context->GetDevice();
-  dk::UniqueMemBlock scratch_block =
-      dk::MemBlockMaker{device, DK_MEMBLOCK_ALIGNMENT}
-          .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached)
-          .create();
-  dk::UniqueCmdBuf scratch = dk::CmdBufMaker{device}.create();
-  if (!scratch_block || !scratch)
-  {
-    PanicAlertFmt("deko3d: failed to allocate scratch resources for pipeline capture");
-    return nullptr;
-  }
-  scratch.addMemory(scratch_block, 0, DK_MEMBLOCK_ALIGNMENT);
+  std::lock_guard capture_guard(g_dk_object_cache->GetPipelineCaptureMutex());
+  DkCmdBuf scratch = g_dk_object_cache->GetPipelineCaptureCommandBuffer();
 
   std::vector<u32> storage(MAX_CAPTURE_WORDS);
-  scratch.beginCaptureCmds(storage.data(), static_cast<u32>(storage.size()));
+  dkCmdBufBeginCaptureCmds(scratch, storage.data(), static_cast<u32>(storage.size()));
 
-  scratch.bindShaders(stage_mask, shaders);
-  scratch.bindRasterizerState(raster);
-  scratch.bindMultisampleState(multisample);
-  scratch.bindColorState(color);
-  scratch.bindColorWriteState(color_write);
-  scratch.bindBlendStates(0, blend_states);
-  scratch.bindDepthStencilState(depth_stencil);
+  dkCmdBufBindShaders(scratch, stage_mask, shaders.data(), static_cast<u32>(shaders.size()));
+  dkCmdBufBindRasterizerState(scratch, &raster);
+  dkCmdBufBindMultisampleState(scratch, &multisample);
+  dkCmdBufBindColorState(scratch, &color);
+  dkCmdBufBindColorWriteState(scratch, &color_write);
+  dkCmdBufBindBlendStates(scratch, 0, blend_states.data(), static_cast<u32>(blend_states.size()));
+  dkCmdBufBindDepthStencilState(scratch, &depth_stencil);
   if (vertex_format)
   {
-    scratch.bindVtxAttribState(vertex_format->GetAttributes());
-    scratch.bindVtxBufferState(buffer_states);
+    dkCmdBufBindVtxAttribState(scratch, vertex_format->GetAttributes().data(),
+                               static_cast<u32>(vertex_format->GetAttributes().size()));
+    dkCmdBufBindVtxBufferState(scratch, buffer_states.data(),
+                               static_cast<u32>(buffer_states.size()));
   }
-  scratch.setPrimitiveRestart(primitive_restart, 0xFFFF);
+  dkCmdBufSetPrimitiveRestart(scratch, primitive_restart, 0xFFFF);
 
-  const u32 num_words = scratch.endCaptureCmds();
+  const u32 num_words = dkCmdBufEndCaptureCmds(scratch);
   storage.resize(num_words);
 
-  return std::make_unique<DKPipeline>(config, std::move(storage), std::move(shader_code),
-                                      primitive);
+  return std::make_unique<DKPipeline>(config, std::move(storage), std::move(shader_code), primitive,
+                                      stage_mask);
 }
 }  // namespace Deko3D

@@ -226,15 +226,16 @@ void DKStateTracker::SetPipeline(const DKPipeline* pipeline)
   if (m_pipeline == pipeline)
     return;
 
-  // Utility and GX pipelines use different uniform buffer bindings, so a change of usage means the
-  // bindings the previous pipeline established no longer apply.
-  const bool new_usage =
+  // Utility and GX pipelines use different uniform buffer bindings.
+  const bool usage_changed =
       pipeline && (!m_pipeline || m_pipeline->GetUsage() != pipeline->GetUsage());
+  const bool stages_changed =
+      pipeline && (!m_pipeline || m_pipeline->GetStageMask() != pipeline->GetStageMask());
 
   m_pipeline = pipeline;
   m_dirty_flags |= DIRTY_FLAG_PIPELINE;
-  if (new_usage)
-    m_dirty_flags |= DIRTY_FLAG_GX_UBOS | DIRTY_FLAG_UTILITY_UBO | DIRTY_FLAG_TEXTURES;
+  if (usage_changed || stages_changed)
+    m_dirty_flags |= DIRTY_FLAG_GX_UBOS | DIRTY_FLAG_UTILITY_UBO;
 }
 
 void DKStateTracker::SetComputeShader(const DKShader* shader)
@@ -362,8 +363,7 @@ void DKStateTracker::BindStaticState(DkCmdBuf cmdbuf)
   dkCmdBufBindSamplerDescriptorSet(cmdbuf, g_dk_object_cache->GetSamplerDescriptorSetAddr(),
                                    DKObjectCache::GetSamplerDescriptorCount());
 
-  // Negating Y in the viewport swizzle puts the two back in agreement without touching shader generation.
-  // TODO: if geometry culls inside-out on device, DKPipeline's frontFace is the matching knob.
+  // Negating Y here compensates for the Y negation already emitted by Vulkan shader generation.
   constexpr DkViewportSwizzle swizzle{DkSwizzle_PositiveX, DkSwizzle_NegativeY, DkSwizzle_PositiveZ,
                                       DkSwizzle_PositiveW};
   std::array<DkViewportSwizzle, DK_NUM_VIEWPORTS> swizzles;
@@ -381,8 +381,7 @@ void DKStateTracker::BindFramebuffer()
   // A render target being replaced is very often about to be sampled from, so order the fragments
   // written so far and drop the caches that could still hold the old contents.
   // TODO: this does not cover a texture sampled while it is still bound as a render target.
-  dkCmdBufBarrier(cmdbuf, DkBarrier_Fragments,
-                  DkInvalidateFlags_Image | DkInvalidateFlags_Descriptors);
+  dkCmdBufBarrier(cmdbuf, DkBarrier_Fragments, DkInvalidateFlags_Image);
 
   m_framebuffer->Bind(cmdbuf);
   m_dirty_flags &= ~DIRTY_FLAG_FRAMEBUFFER;
@@ -445,7 +444,10 @@ void DKStateTracker::UpdateUniformBuffers(DkCmdBuf cmdbuf)
       return;
 
     for (DkStage stage : GRAPHICS_STAGES)
-      dkCmdBufBindUniformBuffers(cmdbuf, stage, UBO_BINDING_UTILITY, &m_utility_ubo, 1);
+    {
+      if (m_pipeline->GetStageMask() & (1u << static_cast<u32>(stage)))
+        dkCmdBufBindUniformBuffers(cmdbuf, stage, UBO_BINDING_UTILITY, &m_utility_ubo, 1);
+    }
 
     m_dirty_flags &= ~DIRTY_FLAG_UTILITY_UBO;
     return;
@@ -456,8 +458,11 @@ void DKStateTracker::UpdateUniformBuffers(DkCmdBuf cmdbuf)
 
   for (DkStage stage : GRAPHICS_STAGES)
   {
-    dkCmdBufBindUniformBuffers(cmdbuf, stage, 0, m_gx_ubos.data(),
-                               static_cast<u32>(m_gx_ubos.size()));
+    if (m_pipeline->GetStageMask() & (1u << static_cast<u32>(stage)))
+    {
+      dkCmdBufBindUniformBuffers(cmdbuf, stage, 0, m_gx_ubos.data(),
+                                 static_cast<u32>(m_gx_ubos.size()));
+    }
   }
 
   m_dirty_flags &= ~DIRTY_FLAG_GX_UBOS;
@@ -519,9 +524,9 @@ bool DKStateTracker::Bind()
     dkCmdBufBindStorageBuffers(cmdbuf, DkStage_Vertex, SSBO_BINDING_VERTEX, &m_vertex_buffer, 1);
   }
 
-  m_dirty_flags &= ~(DIRTY_FLAG_STATIC_STATE | DIRTY_FLAG_PIPELINE | DIRTY_FLAG_INDEX_BUFFER |
-                     DIRTY_FLAG_VIEWPORT | DIRTY_FLAG_SCISSOR | DIRTY_FLAG_TEXTURES |
-                     DIRTY_FLAG_SSBO);
+  m_dirty_flags &=
+      ~(DIRTY_FLAG_STATIC_STATE | DIRTY_FLAG_PIPELINE | DIRTY_FLAG_INDEX_BUFFER |
+        DIRTY_FLAG_VIEWPORT | DIRTY_FLAG_SCISSOR | DIRTY_FLAG_TEXTURES | DIRTY_FLAG_SSBO);
   return true;
 }
 

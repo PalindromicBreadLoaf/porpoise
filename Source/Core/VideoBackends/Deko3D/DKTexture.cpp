@@ -15,7 +15,10 @@
 
 #include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKGfx.h"
+#include "VideoBackends/Deko3D/DKObjectCache.h"
 #include "VideoBackends/Deko3D/DKStateTracker.h"
+#include "VideoBackends/Deko3D/DKStreamBuffer.h"
 
 namespace Deko3D
 {
@@ -148,7 +151,7 @@ std::unique_ptr<DKTexture> DKTexture::Create(const TextureConfig& config, std::s
   image.initialize(layout, memblock, 0);
 
   dk::ImageView view{image};
-  DkImageDescriptor descriptor;
+  DkImageDescriptor descriptor{};
   dkImageDescriptorInitialize(&descriptor, &view, config.IsComputeImage(), false);
 
   return std::make_unique<DKTexture>(config, std::move(memblock), layout, image, descriptor);
@@ -159,7 +162,7 @@ std::unique_ptr<DKTexture> DKTexture::CreateAdopted(const TextureConfig& config,
                                                     const dk::Image& image)
 {
   dk::ImageView view{image};
-  DkImageDescriptor descriptor;
+  DkImageDescriptor descriptor{};
   dkImageDescriptorInitialize(&descriptor, &view, config.IsComputeImage(), false);
 
   return std::make_unique<DKTexture>(config, dk::UniqueMemBlock{}, layout, image, descriptor);
@@ -234,30 +237,60 @@ void DKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
   const u32 num_rows = Common::AlignUp(height, block_size) / block_size;
   const u32 source_pitch = AbstractTexture::CalculateStrideForFormat(m_config.format, row_length);
   const u32 upload_size = source_pitch * num_rows;
-
-  // TODO: replace the per-upload block with a shared texture-upload ring.
-  dk::UniqueMemBlock upload =
-      dk::MemBlockMaker{g_dk_context->GetDevice(),
-                        static_cast<u32>(Common::AlignUp(upload_size, DK_MEMBLOCK_ALIGNMENT))}
-          .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached)
-          .create();
-  if (!upload)
+  if (upload_size > buffer_size)
   {
-    PanicAlertFmt("Failed to allocate {} bytes for a texture upload.", upload_size);
+    ERROR_LOG_FMT(VIDEO, "deko3d: texture upload needs {} bytes but only {} were provided",
+                  upload_size, buffer_size);
     return;
   }
 
-  std::memcpy(upload.getCpuAddr(), buffer, upload_size);
+  DkGpuAddr upload_addr = DK_GPU_ADDR_INVALID;
+  dk::UniqueMemBlock upload;
+  if (upload_size <= STAGING_TEXTURE_UPLOAD_THRESHOLD)
+  {
+    DKStreamBuffer* upload_buffer = g_dk_object_cache->GetTextureUploadBuffer();
+    if (!upload_buffer->ReserveMemory(upload_size, DK_IMAGE_LINEAR_STRIDE_ALIGNMENT))
+    {
+      WARN_LOG_FMT(VIDEO, "Executing command buffer while waiting for texture upload space");
+      DKGfx::GetInstance()->ExecuteCommandBuffer(false);
+      if (!upload_buffer->ReserveMemory(upload_size, DK_IMAGE_LINEAR_STRIDE_ALIGNMENT))
+      {
+        PanicAlertFmt("Failed to allocate {} bytes from the texture upload ring.", upload_size);
+        return;
+      }
+    }
+
+    upload_addr = upload_buffer->GetCurrentGpuAddr();
+    std::memcpy(upload_buffer->GetCurrentHostPointer(), buffer, upload_size);
+    upload_buffer->CommitMemory(upload_size);
+  }
+  else
+  {
+    upload =
+        dk::MemBlockMaker{g_dk_context->GetDevice(),
+                          static_cast<u32>(Common::AlignUp(upload_size, DK_MEMBLOCK_ALIGNMENT))}
+            .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached)
+            .create();
+    if (!upload)
+    {
+      PanicAlertFmt("Failed to allocate {} bytes for a texture upload.", upload_size);
+      return;
+    }
+
+    upload_addr = upload.getGpuAddr();
+    std::memcpy(upload.getCpuAddr(), buffer, upload_size);
+  }
 
   // Deko3d's rowLength is the buffer row pitch in bytes.
-  const DkCopyBuf src{upload.getGpuAddr(), source_pitch, 0};
+  const DkCopyBuf src{upload_addr, source_pitch, 0};
   const DkImageView dst_view = MakeView(level, layer, 1);
   const DkImageRect dst_rect{0, 0, 0, width, height, 1};
 
   dkCmdBufCopyBufferToImage(g_dk_command_buffer_mgr->GetCurrentInitCommandBuffer(), &src, &dst_view,
                             &dst_rect, 0);
 
-  DeferMemBlockDestruction(std::move(upload));
+  if (upload)
+    DeferMemBlockDestruction(std::move(upload));
 }
 
 DKStagingTexture::DKStagingTexture(StagingTextureType type, const TextureConfig& config,

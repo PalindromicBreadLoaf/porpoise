@@ -162,10 +162,9 @@ void DKCommandBufferManager::SubmitCommandBuffer(bool wait_for_completion,
 
   queue.submitCommands(resources.draw.cmdbuf.finishList());
 
-  // Flush GPU caches as part of the signal, so anything these commands wrote is visible to the CPU.
-  // TODO: this flushes on every submit for the benefit of the readback paths.
-  // Narrow it to submits that actually have a readback pending.
-  queue.signalFence(resources.fence, true);
+  // Readbacks perform their required copy-engine-to-3D switch and L2 invalidation at the copy site.
+  // The fence only has to order completion here.
+  queue.signalFence(resources.fence, false);
 
   // Submitted work does not begin executing until the queue is flushed.
   if (present_swap_chain)

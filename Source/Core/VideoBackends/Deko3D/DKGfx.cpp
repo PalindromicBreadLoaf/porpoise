@@ -250,8 +250,9 @@ void DKGfx::DispatchComputeShader(const AbstractShader* shader, u32 /*groupsize_
 
 void DKGfx::ExecuteCommandBuffer(bool wait_for_completion)
 {
+  // State belongs to the deko3d queue, not to an individual command list, so rotating command
+  // buffers does not require a full rebind.
   g_dk_command_buffer_mgr->SubmitCommandBuffer(wait_for_completion);
-  DKStateTracker::GetInstance()->InvalidateCachedState();
 }
 
 void DKGfx::Flush()
@@ -309,7 +310,6 @@ void DKGfx::PresentBackbuffer()
   else
     g_dk_command_buffer_mgr->SubmitCommandBuffer(false);
 
-  DKStateTracker::GetInstance()->InvalidateCachedState();
   m_current_slot = -1;
 }
 

@@ -285,6 +285,11 @@ void DKVertexManager::UploadUtilityUniforms(const void* data, u32 data_size)
   {
     WARN_LOG_FMT(VIDEO, "Executing command buffer while waiting for ext space in uniform buffer");
     DKGfx::GetInstance()->ExecuteCommandBuffer(false);
+    if (!m_uniform_stream_buffer->ReserveMemory(size, DK_UNIFORM_BUF_ALIGNMENT))
+    {
+      PanicAlertFmt("Failed to allocate space for utility uniforms");
+      return;
+    }
   }
 
   DKStateTracker::GetInstance()->SetUtilityUniformBuffer(

@@ -24,10 +24,16 @@ constexpr u32 DRAW_COMMAND_BUFFER_SIZE = 256 * 1024;
 // Size of each additional slice handed to a command buffer that runs out of space.
 constexpr u32 COMMAND_BUFFER_GROWTH_SIZE = 256 * 1024;
 
+// Shared upload ring for texture data. Larger uploads use a temporary block so a single texture
+// cannot pin a large portion of the ring until its command buffer retires.
+constexpr u32 TEXTURE_UPLOAD_BUFFER_SIZE = 32 * 1024 * 1024;
+constexpr u32 STAGING_TEXTURE_UPLOAD_THRESHOLD = 4 * 1024 * 1024;
+
 // Maximum number of vertex attributes, matching the Vulkan backend.
 constexpr u32 MAX_VERTEX_ATTRIBUTES = 16;
 
-// Uniform buffers for GX pipelines. The same buffer is bound at the same index on every stage that reads it.
+// Uniform buffers for GX pipelines. The same buffer is bound at the same index on every stage that
+// reads it.
 constexpr u32 UBO_BINDING_PS = 0;
 constexpr u32 UBO_BINDING_VS = 1;
 constexpr u32 UBO_BINDING_CUST = 2;
@@ -45,7 +51,8 @@ constexpr u32 SSBO_BINDING_VERTEX = 1;
 constexpr u32 NUM_PIXEL_SHADER_SAMPLERS = VideoCommon::MAX_PIXEL_SHADER_SAMPLERS;
 constexpr u32 NUM_COMPUTE_SHADER_SAMPLERS = VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS;
 
-// Image descriptors churn per draw, so they are allocated from a fence-tracked ring rather than rewritten in place.
+// Image descriptors churn per draw, so they are allocated from a fence-tracked ring rather than
+// rewritten in place.
 constexpr u32 NUM_IMAGE_DESCRIPTORS = 64 * 1024;
 
 // Sampler descriptors are keyed by SamplerState and only written when a new state first appears, so

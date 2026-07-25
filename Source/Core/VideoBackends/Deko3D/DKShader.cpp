@@ -93,11 +93,11 @@ std::unique_ptr<DKShader> DKShader::CreateFromBinary(ShaderStage stage, const vo
   // memory. Deko3d reads the control section from the CPU-side copy during initialization.
   std::memcpy(code_block.getCpuAddr(), dksh.data() + header.control_sz, header.code_sz);
 
-  DkShaderMaker maker;
+  DkShaderMaker maker{};
   dkShaderMakerDefaults(&maker, code_block, 0);
   maker.control = dksh.data();
 
-  DkShader shader;
+  DkShader shader{};
   dkShaderInitialize(&shader, &maker);
   if (!dkShaderIsValid(&shader))
   {
