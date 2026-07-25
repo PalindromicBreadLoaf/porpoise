@@ -18,6 +18,7 @@ namespace Deko3D
 class DKFramebuffer;
 class DKPipeline;
 class DKShader;
+class DKShaderCode;
 class DKStreamBuffer;
 class DKTexture;
 
@@ -121,6 +122,11 @@ private:
 
   const DKPipeline* m_pipeline = nullptr;
   const DKShader* m_compute_shader = nullptr;
+
+  // Dispatches record the compute shader's code address, so its memory has to stay mapped even if
+  // videocommon frees the shader before the GPU catches up.
+  std::shared_ptr<DKShaderCode> m_compute_shader_code;
+
   DKFramebuffer* m_framebuffer = nullptr;
 
   std::array<DkBufExtents, NUM_UBO_BINDINGS> m_gx_ubos = {};

@@ -200,8 +200,10 @@ DkBlendState GetBlendState(const BlendingState& state)
 }  // namespace
 
 DKPipeline::DKPipeline(const AbstractPipelineConfig& config, std::vector<u32> replay_words,
+                       std::vector<std::shared_ptr<DKShaderCode>> shader_code,
                        DkPrimitive primitive)
-    : AbstractPipeline(config), m_replay_words(std::move(replay_words)), m_primitive(primitive)
+    : AbstractPipeline(config), m_replay_words(std::move(replay_words)),
+      m_shader_code(std::move(shader_code)), m_primitive(primitive)
 {
 }
 
@@ -239,20 +241,25 @@ std::unique_ptr<DKPipeline> DKPipeline::Create(const AbstractPipelineConfig& con
   if (!vertex_shader->IsValid() || !pixel_shader->IsValid() ||
       (geometry_shader && !geometry_shader->IsValid()))
   {
-    return std::make_unique<DKPipeline>(config, std::vector<u32>{}, primitive);
+    return std::make_unique<DKPipeline>(config, std::vector<u32>{},
+                                        std::vector<std::shared_ptr<DKShaderCode>>{}, primitive);
   }
 
   // Shaders.
   std::vector<const DkShader*> shaders;
+  std::vector<std::shared_ptr<DKShaderCode>> shader_code;
   u32 stage_mask = 0;
   shaders.push_back(vertex_shader->GetShader());
+  shader_code.push_back(vertex_shader->GetCode());
   stage_mask |= DkStageFlag_Vertex;
   if (geometry_shader)
   {
     shaders.push_back(geometry_shader->GetShader());
+    shader_code.push_back(geometry_shader->GetCode());
     stage_mask |= DkStageFlag_Geometry;
   }
   shaders.push_back(pixel_shader->GetShader());
+  shader_code.push_back(pixel_shader->GetCode());
   stage_mask |= DkStageFlag_Fragment;
 
   const auto* vertex_format = static_cast<const DKVertexFormat*>(config.vertex_format);
@@ -297,6 +304,7 @@ std::unique_ptr<DKPipeline> DKPipeline::Create(const AbstractPipelineConfig& con
   const u32 num_words = scratch.endCaptureCmds();
   storage.resize(num_words);
 
-  return std::make_unique<DKPipeline>(config, std::move(storage), primitive);
+  return std::make_unique<DKPipeline>(config, std::move(storage), std::move(shader_code),
+                                      primitive);
 }
 }  // namespace Deko3D

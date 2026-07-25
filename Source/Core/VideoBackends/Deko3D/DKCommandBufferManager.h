@@ -103,4 +103,7 @@ private:
 };
 
 extern std::unique_ptr<DKCommandBufferManager> g_dk_command_buffer_mgr;
+
+// Frees a memory block once the command buffer currently being recorded has retired.
+void DeferMemBlockDestruction(dk::UniqueMemBlock block);
 }  // namespace Deko3D

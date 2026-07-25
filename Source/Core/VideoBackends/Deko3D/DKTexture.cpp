@@ -21,20 +21,6 @@ namespace Deko3D
 {
 namespace
 {
-// Frees a memory block once the command buffer currently being recorded has retired.
-void DeferMemBlockDestruction(dk::UniqueMemBlock block)
-{
-  if (!block)
-    return;
-
-  if (g_dk_command_buffer_mgr)
-  {
-    auto shared = std::make_shared<dk::UniqueMemBlock>(std::move(block));
-    g_dk_command_buffer_mgr->DeferCleanup([shared]() {});
-  }
-  // Otherwise the GPU has already been drained and the block is freed here.
-}
-
 DkImageType GetDkImageType(const TextureConfig& config)
 {
   if (config.type == AbstractTextureType::Texture_CubeMap)

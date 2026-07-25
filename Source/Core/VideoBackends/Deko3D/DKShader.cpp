@@ -9,6 +9,7 @@
 #include "Common/Align.h"
 #include "Common/Logging/Log.h"
 
+#include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
 
 namespace Deko3D
@@ -29,10 +30,18 @@ struct DkshHeader
 };
 }  // namespace
 
-DKShader::DKShader(ShaderStage stage, std::vector<u8> dksh, dk::UniqueMemBlock code_block,
-                   const DkShader& shader)
-    : AbstractShader(stage), m_dksh(std::move(dksh)), m_code_block(std::move(code_block)),
-      m_shader(shader)
+DKShaderCode::DKShaderCode(dk::UniqueMemBlock block, const DkShader& shader)
+    : m_block(std::move(block)), m_shader(shader)
+{
+}
+
+DKShaderCode::~DKShaderCode()
+{
+  DeferMemBlockDestruction(std::move(m_block));
+}
+
+DKShader::DKShader(ShaderStage stage, std::vector<u8> dksh, std::shared_ptr<DKShaderCode> code)
+    : AbstractShader(stage), m_dksh(std::move(dksh)), m_code(std::move(code))
 {
 }
 
@@ -96,6 +105,7 @@ std::unique_ptr<DKShader> DKShader::CreateFromBinary(ShaderStage stage, const vo
     return nullptr;
   }
 
-  return std::make_unique<DKShader>(stage, std::move(dksh), std::move(code_block), shader);
+  return std::make_unique<DKShader>(stage, std::move(dksh),
+                                    std::make_shared<DKShaderCode>(std::move(code_block), shader));
 }
 }  // namespace Deko3D

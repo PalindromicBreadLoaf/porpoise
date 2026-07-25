@@ -243,4 +243,19 @@ void DKCommandBufferManager::WaitForFenceCounter(u64 fence_counter)
   ASSERT(index != m_current_cmd_buffer);
   WaitForCommandBufferCompletion(index);
 }
+
+void DeferMemBlockDestruction(dk::UniqueMemBlock block)
+{
+  if (!block)
+    return;
+
+  if (g_dk_command_buffer_mgr)
+  {
+    // std::function requires a copyable callable, so ownership passes through a shared_ptr the
+    // lambda keeps alive until the cleanup list is cleared.
+    auto shared = std::make_shared<dk::UniqueMemBlock>(std::move(block));
+    g_dk_command_buffer_mgr->DeferCleanup([shared]() {});
+  }
+  // Otherwise the GPU has already been drained and the block is freed here.
+}
 }  // namespace Deko3D

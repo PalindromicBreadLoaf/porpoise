@@ -15,12 +15,14 @@
 
 namespace Deko3D
 {
+class DKShaderCode;
+
 // deko3d has no pipeline object, so this mocks one for the Dolphin side of things.
 class DKPipeline final : public AbstractPipeline
 {
 public:
   DKPipeline(const AbstractPipelineConfig& config, std::vector<u32> replay_words,
-             DkPrimitive primitive);
+             std::vector<std::shared_ptr<DKShaderCode>> shader_code, DkPrimitive primitive);
   ~DKPipeline() override;
 
   // Injects the baked state setting commands into the command buffer.
@@ -37,6 +39,11 @@ public:
 
 private:
   std::vector<u32> m_replay_words;
+
+  // The replay words carry the GPU addresses of the shaders' code, and videocommon drops the
+  // AbstractShaders as soon as CreatePipeline returns.
+  std::vector<std::shared_ptr<DKShaderCode>> m_shader_code;
+
   DkPrimitive m_primitive;
 };
 }  // namespace Deko3D

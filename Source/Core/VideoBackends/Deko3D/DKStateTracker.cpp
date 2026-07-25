@@ -242,7 +242,12 @@ void DKStateTracker::SetComputeShader(const DKShader* shader)
   if (m_compute_shader == shader)
     return;
 
+  // Dispatches already recorded still read the outgoing shader.
+  if (m_compute_shader_code && g_dk_command_buffer_mgr)
+    g_dk_command_buffer_mgr->DeferCleanup([code = std::move(m_compute_shader_code)]() {});
+
   m_compute_shader = shader;
+  m_compute_shader_code = shader ? shader->GetCode() : nullptr;
   m_dirty_flags |= DIRTY_FLAG_COMPUTE_SHADER;
 }
 

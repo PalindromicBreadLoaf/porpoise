@@ -82,7 +82,8 @@ DKGfx::CreateShaderFromSource(ShaderStage stage, std::string_view source,
                               VideoCommon::ShaderIncluder* /*shader_includer*/,
                               std::string_view name)
 {
-  // TODO: uam has no #include support, so graphics-mod shaders that use the includer will not resolve.
+  // TODO: uam has no #include support, so graphics-mod shaders that use the includer will not
+  // resolve.
   const auto dksh = ShaderCompiler::CompileShader(stage, source, name);
   if (!dksh)
     return nullptr;
