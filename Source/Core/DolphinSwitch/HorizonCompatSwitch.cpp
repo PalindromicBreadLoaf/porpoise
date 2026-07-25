@@ -4,11 +4,14 @@
 
 // Mesa assumes a POSIX host. These are the symbols NXVK references that newlib declares but never defines.
 
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #include <cerrno>
 #include <cstddef>
+#include <dirent.h>
 #include <malloc.h>
+#include <pwd.h>
 #include <regex.h>
 #include <signal.h>
 #include <unistd.h>
@@ -102,5 +105,31 @@ int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
   if (oldset)
     *oldset = 0;
   return 0;
+}
+
+// Mesa's disk shader cache. Horizon has no home directory to put it in and no advisory locking,
+// so every entry point fails and mesa disables the cache for itself.
+int getpwuid_r(uid_t uid, struct passwd* pwd, char* buf, size_t buflen, struct passwd** result)
+{
+  *result = nullptr;
+  return ENOENT;
+}
+
+int dirfd(DIR* dirp)
+{
+  errno = ENOTSUP;
+  return -1;
+}
+
+int fstatat(int fd, const char* __restrict path, struct stat* __restrict buf, int flag)
+{
+  errno = ENOSYS;
+  return -1;
+}
+
+int flock(int fd, int operation)
+{
+  errno = ENOSYS;
+  return -1;
 }
 }
