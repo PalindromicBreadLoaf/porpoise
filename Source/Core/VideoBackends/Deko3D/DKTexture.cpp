@@ -15,6 +15,7 @@
 
 #include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKStateTracker.h"
 
 namespace Deko3D
 {
@@ -146,9 +147,9 @@ std::unique_ptr<DKTexture> DKTexture::Create(const TextureConfig& config, std::s
   layout_maker.initialize(layout);
 
   dk::UniqueMemBlock memblock =
-      dk::MemBlockMaker{device, static_cast<u32>(Common::AlignUp(layout.getSize(),
-                                                                 std::max<u64>(layout.getAlignment(),
-                                                                               DK_MEMBLOCK_ALIGNMENT)))}
+      dk::MemBlockMaker{device, static_cast<u32>(Common::AlignUp(
+                                    layout.getSize(),
+                                    std::max<u64>(layout.getAlignment(), DK_MEMBLOCK_ALIGNMENT)))}
           .setFlags(DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
           .create();
   if (!memblock)
@@ -165,6 +166,17 @@ std::unique_ptr<DKTexture> DKTexture::Create(const TextureConfig& config, std::s
   dkImageDescriptorInitialize(&descriptor, &view, config.IsComputeImage(), false);
 
   return std::make_unique<DKTexture>(config, std::move(memblock), layout, image, descriptor);
+}
+
+std::unique_ptr<DKTexture> DKTexture::CreateAdopted(const TextureConfig& config,
+                                                    const dk::ImageLayout& layout,
+                                                    const dk::Image& image)
+{
+  dk::ImageView view{image};
+  DkImageDescriptor descriptor;
+  dkImageDescriptorInitialize(&descriptor, &view, config.IsComputeImage(), false);
+
+  return std::make_unique<DKTexture>(config, dk::UniqueMemBlock{}, layout, image, descriptor);
 }
 
 DkImageView DKTexture::MakeView(u32 level, u32 layer, u32 layer_count) const
@@ -194,12 +206,12 @@ void DKTexture::CopyRectangleFromTexture(const AbstractTexture* src,
   const DkImageView src_view = src_texture->MakeView(src_level, src_layer, 1);
   const DkImageView dst_view = MakeView(dst_level, dst_layer, 1);
 
-  const DkImageRect src_image_rect{static_cast<u32>(src_rect.left), static_cast<u32>(src_rect.top), 0,
-                                   static_cast<u32>(src_rect.GetWidth()),
-                                   static_cast<u32>(src_rect.GetHeight()), 1};
-  const DkImageRect dst_image_rect{static_cast<u32>(dst_rect.left), static_cast<u32>(dst_rect.top), 0,
-                                   static_cast<u32>(dst_rect.GetWidth()),
-                                   static_cast<u32>(dst_rect.GetHeight()), 1};
+  const DkImageRect src_image_rect{
+      static_cast<u32>(src_rect.left),       static_cast<u32>(src_rect.top),         0,
+      static_cast<u32>(src_rect.GetWidth()), static_cast<u32>(src_rect.GetHeight()), 1};
+  const DkImageRect dst_image_rect{
+      static_cast<u32>(dst_rect.left),       static_cast<u32>(dst_rect.top),         0,
+      static_cast<u32>(dst_rect.GetWidth()), static_cast<u32>(dst_rect.GetHeight()), 1};
 
   // The copy engine auto-synchronizes against the 3D engine on the subchannel switch.
   dkCmdBufCopyImage(g_dk_command_buffer_mgr->GetCurrentCommandBuffer(), &src_view, &src_image_rect,
@@ -211,14 +223,15 @@ void DKTexture::ResolveFromTexture(const AbstractTexture* src, const MathUtil::R
 {
   const DKTexture* src_texture = static_cast<const DKTexture*>(src);
   DEBUG_ASSERT(m_config.samples == 1 && m_config.width == src_texture->m_config.width &&
-               m_config.height == src_texture->m_config.height && src_texture->m_config.samples > 1);
+               m_config.height == src_texture->m_config.height &&
+               src_texture->m_config.samples > 1);
 
   const DkImageView src_view = src_texture->MakeView(level, layer, 1);
   const DkImageView dst_view = MakeView(level, layer, 1);
 
-  const DkImageRect image_rect{static_cast<u32>(rect.left), static_cast<u32>(rect.top), 0,
-                               static_cast<u32>(rect.GetWidth()), static_cast<u32>(rect.GetHeight()),
-                               1};
+  const DkImageRect image_rect{
+      static_cast<u32>(rect.left),       static_cast<u32>(rect.top),         0,
+      static_cast<u32>(rect.GetWidth()), static_cast<u32>(rect.GetHeight()), 1};
 
   // A linearly filtered blit doubles as an MSAA resolve while still allowing a sub-rectangle.
   dkCmdBufBlitImage(g_dk_command_buffer_mgr->GetCurrentCommandBuffer(), &src_view, &image_rect,
@@ -281,8 +294,8 @@ std::unique_ptr<DKStagingTexture> DKStagingTexture::Create(StagingTextureType ty
 
   // GPU->CPU readback cannot invalidate the CPU cache safely, so keep those blocks uncached.
   // Upload blocks stay CPU-cached and are flushed before each copy.
-  const u32 cpu_access = type == StagingTextureType::Upload ? DkMemBlockFlags_CpuCached :
-                                                              DkMemBlockFlags_CpuUncached;
+  const u32 cpu_access =
+      type == StagingTextureType::Upload ? DkMemBlockFlags_CpuCached : DkMemBlockFlags_CpuUncached;
 
   dk::UniqueMemBlock memblock =
       dk::MemBlockMaker{g_dk_context->GetDevice(),
@@ -310,9 +323,9 @@ void DKStagingTexture::CopyFromTexture(const AbstractTexture* src,
   DkCmdBuf cmdbuf = g_dk_command_buffer_mgr->GetCurrentCommandBuffer();
 
   const DkImageView src_view = src_tex->MakeView(src_level, src_layer, 1);
-  const DkImageRect src_image_rect{static_cast<u32>(src_rect.left), static_cast<u32>(src_rect.top), 0,
-                                   static_cast<u32>(src_rect.GetWidth()),
-                                   static_cast<u32>(src_rect.GetHeight()), 1};
+  const DkImageRect src_image_rect{
+      static_cast<u32>(src_rect.left),       static_cast<u32>(src_rect.top),         0,
+      static_cast<u32>(src_rect.GetWidth()), static_cast<u32>(src_rect.GetHeight()), 1};
 
   const u32 offset = static_cast<u32>(static_cast<size_t>(dst_rect.top) * m_config.GetStride() +
                                       static_cast<size_t>(dst_rect.left) * m_texel_size);
@@ -320,7 +333,8 @@ void DKStagingTexture::CopyFromTexture(const AbstractTexture* src,
 
   dkCmdBufCopyImageToBuffer(cmdbuf, &src_view, &src_image_rect, &dst, 0);
 
-  // A forced switch to the 3D engine and invalidation of L2 is required so the written data actually reaches memory.
+  // A forced switch to the 3D engine and invalidation of L2 is required so the written data
+  // actually reaches memory.
   const u32 threed_nop = 0x80000040;
   dkCmdBufReplayCmds(cmdbuf, &threed_nop, 1);
   dkCmdBufBarrier(cmdbuf, DkBarrier_None, DkInvalidateFlags_L2Cache);
@@ -348,9 +362,9 @@ void DKStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect, A
   const DkCopyBuf src{m_memblock.getGpuAddr() + offset, static_cast<u32>(m_config.GetStride()), 0};
 
   const DkImageView dst_view = dst_tex->MakeView(dst_level, dst_layer, 1);
-  const DkImageRect dst_image_rect{static_cast<u32>(dst_rect.left), static_cast<u32>(dst_rect.top), 0,
-                                   static_cast<u32>(dst_rect.GetWidth()),
-                                   static_cast<u32>(dst_rect.GetHeight()), 1};
+  const DkImageRect dst_image_rect{
+      static_cast<u32>(dst_rect.left),       static_cast<u32>(dst_rect.top),         0,
+      static_cast<u32>(dst_rect.GetWidth()), static_cast<u32>(dst_rect.GetHeight()), 1};
 
   dkCmdBufCopyBufferToImage(cmdbuf, &src, &dst_view, &dst_image_rect, 0);
 
@@ -412,6 +426,20 @@ DKFramebuffer::Create(DKTexture* color_attachment, DKTexture* depth_attachment,
   return std::make_unique<DKFramebuffer>(color_attachment, depth_attachment,
                                          std::move(additional_color_attachments), color_format,
                                          depth_format, width, height, layers, samples);
+}
+
+void DKFramebuffer::Unbind() const
+{
+  DKStateTracker* state_tracker = DKStateTracker::GetInstance();
+  if (!state_tracker)
+    return;
+
+  if (m_color_attachment)
+    state_tracker->UnbindTexture(static_cast<const DKTexture*>(m_color_attachment));
+  if (m_depth_attachment)
+    state_tracker->UnbindTexture(static_cast<const DKTexture*>(m_depth_attachment));
+  for (const AbstractTexture* attachment : m_additional_color_attachments)
+    state_tracker->UnbindTexture(static_cast<const DKTexture*>(attachment));
 }
 
 void DKFramebuffer::Bind(DkCmdBuf cmdbuf) const

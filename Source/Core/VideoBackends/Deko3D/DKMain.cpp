@@ -10,7 +10,9 @@
 #include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
 #include "VideoBackends/Deko3D/DKGfx.h"
+#include "VideoBackends/Deko3D/DKObjectCache.h"
 #include "VideoBackends/Deko3D/DKPerfQuery.h"
+#include "VideoBackends/Deko3D/DKStateTracker.h"
 #include "VideoBackends/Deko3D/DKSwapChain.h"
 #include "VideoBackends/Deko3D/DKVertexManager.h"
 
@@ -35,10 +37,8 @@ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
   g_backend_info.bSupports3DVision = false;
   g_backend_info.bSupportsEarlyZ = true;
   g_backend_info.bSupportsBindingLayout = true;
-  g_backend_info.bSupportsBBox = true;
   g_backend_info.bSupportsGSInstancing = true;
   g_backend_info.bSupportsPostProcessing = true;
-  g_backend_info.bSupportsPaletteConversion = true;
   g_backend_info.bSupportsClipControl = true;
   g_backend_info.bSupportsSSAA = true;
   g_backend_info.bSupportsBitfield = true;
@@ -55,6 +55,8 @@ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
   g_backend_info.bSupportsDynamicVertexLoader = false;
 
   // TODO: enable once the corresponding deko3d paths land.
+  g_backend_info.bSupportsBBox = false;
+  g_backend_info.bSupportsPaletteConversion = false;
   g_backend_info.bSupportsGPUTextureDecoding = false;
   g_backend_info.bSupportsST3CTextures = false;
   g_backend_info.bSupportsBPTCTextures = false;
@@ -81,6 +83,23 @@ bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
   if (!g_dk_command_buffer_mgr->Initialize())
   {
     PanicAlertFmt("Failed to create deko3d command buffers.");
+    Shutdown();
+    return false;
+  }
+
+  g_dk_object_cache = DKObjectCache::Create();
+  if (!g_dk_object_cache)
+  {
+    PanicAlertFmt("Failed to create the deko3d object cache.");
+    Shutdown();
+    return false;
+  }
+
+  // The vertex manager binds through the state tracker as soon as it is initialized, so it has to
+  // exist before InitializeShared.
+  if (!DKStateTracker::CreateInstance())
+  {
+    PanicAlertFmt("Failed to create the deko3d state tracker.");
     Shutdown();
     return false;
   }
@@ -115,6 +134,10 @@ void VideoBackend::Shutdown()
 
   ShutdownShared();
 
+  // The state tracker's dummy textures defer their memory back to the command buffer manager, so
+  // it has to go first.
+  DKStateTracker::DestroyInstance();
+  g_dk_object_cache.reset();
   g_dk_command_buffer_mgr.reset();
   g_dk_context.reset();
 }

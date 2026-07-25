@@ -26,6 +26,9 @@ public:
   // Injects the baked state setting commands into the command buffer.
   void Replay(DkCmdBuf cmdbuf) const;
 
+  // False when the config's shaders had no DKSH behind them, which is the case for everything right now.
+  bool IsValid() const { return !m_replay_words.empty(); }
+
   // deko3d carries primitive topology on each draw rather than in the pipeline.
   DkPrimitive GetPrimitive() const { return m_primitive; }
   AbstractPipelineUsage GetUsage() const { return m_config.usage; }

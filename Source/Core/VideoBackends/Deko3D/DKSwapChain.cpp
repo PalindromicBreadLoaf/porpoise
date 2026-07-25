@@ -12,6 +12,9 @@
 #include "Common/Logging/Log.h"
 
 #include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKTexture.h"
+
+#include "VideoCommon/TextureConfig.h"
 
 namespace Deko3D
 {
@@ -65,11 +68,22 @@ bool DKSwapChain::Initialize()
     return false;
   }
 
+  const TextureConfig config(m_width, m_height, 1, 1, 1, GetTextureFormat(),
+                             AbstractTextureFlag_RenderTarget, AbstractTextureType::Texture_2D);
+
   std::array<DkImage const*, NUM_IMAGES> image_ptrs;
   for (u32 i = 0; i < NUM_IMAGES; ++i)
   {
     m_images[i].initialize(layout, m_image_memblock, static_cast<u32>(aligned_size * i));
     image_ptrs[i] = &m_images[i];
+
+    m_textures[i] = DKTexture::CreateAdopted(config, layout, m_images[i]);
+    m_framebuffers[i] = DKFramebuffer::Create(m_textures[i].get(), nullptr, {});
+    if (!m_framebuffers[i])
+    {
+      ERROR_LOG_FMT(VIDEO, "deko3d: failed to wrap swapchain image {} in a framebuffer", i);
+      return false;
+    }
   }
 
   m_swapchain = dk::SwapchainMaker{device, m_native_window, image_ptrs}.create();
@@ -88,6 +102,10 @@ void DKSwapChain::Destroy()
   if (g_dk_context)
     g_dk_context->WaitIdle();
   m_swapchain = nullptr;
+  for (auto& framebuffer : m_framebuffers)
+    framebuffer.reset();
+  for (auto& texture : m_textures)
+    texture.reset();
   m_image_memblock = nullptr;
 }
 

@@ -15,6 +15,9 @@
 
 namespace Deko3D
 {
+class DKFramebuffer;
+class DKTexture;
+
 // Wraps a DkSwapchain over the libnx nwindow.
 class DKSwapChain
 {
@@ -29,6 +32,11 @@ public:
   u32 GetWidth() const { return m_width; }
   u32 GetHeight() const { return m_height; }
   const dk::Image& GetImage(int slot) const { return m_images[slot]; }
+
+  // Each slot is wrapped in a framebuffer so the presenter can draw the XFB blit and the UI through
+  // the ordinary pipeline rather than a backbuffer-only path.
+  DKFramebuffer* GetFramebuffer(int slot) const { return m_framebuffers[slot].get(); }
+
   static AbstractTextureFormat GetTextureFormat() { return AbstractTextureFormat::RGBA8; }
 
   // Blocks until an image is free, returning its slot, or -1 on error.
@@ -48,6 +56,8 @@ private:
 
   dk::UniqueMemBlock m_image_memblock;
   std::array<dk::Image, NUM_IMAGES> m_images;
+  std::array<std::unique_ptr<DKTexture>, NUM_IMAGES> m_textures;
+  std::array<std::unique_ptr<DKFramebuffer>, NUM_IMAGES> m_framebuffers;
   dk::UniqueSwapchain m_swapchain;
 };
 }  // namespace Deko3D

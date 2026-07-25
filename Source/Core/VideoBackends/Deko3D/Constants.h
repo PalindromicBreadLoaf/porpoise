@@ -7,6 +7,7 @@
 #include <cstddef>
 
 #include "Common/CommonTypes.h"
+#include "VideoCommon/Constants.h"
 
 namespace Deko3D
 {
@@ -25,4 +26,29 @@ constexpr u32 COMMAND_BUFFER_GROWTH_SIZE = 256 * 1024;
 
 // Maximum number of vertex attributes, matching the Vulkan backend.
 constexpr u32 MAX_VERTEX_ATTRIBUTES = 16;
+
+// Uniform buffers for GX pipelines. The same buffer is bound at the same index on every stage that reads it.
+constexpr u32 UBO_BINDING_PS = 0;
+constexpr u32 UBO_BINDING_VS = 1;
+constexpr u32 UBO_BINDING_CUST = 2;
+constexpr u32 UBO_BINDING_GS = 3;
+constexpr u32 NUM_UBO_BINDINGS = 4;
+
+// Utility pipelines have a single uniform buffer shared by all stages.
+constexpr u32 UBO_BINDING_UTILITY = 0;
+
+// Storage buffers. The spaces are per-stage.
+constexpr u32 SSBO_BINDING_BBOX = 0;
+constexpr u32 SSBO_BINDING_VERTEX = 1;
+
+// Combined image and sampler bindings.
+constexpr u32 NUM_PIXEL_SHADER_SAMPLERS = VideoCommon::MAX_PIXEL_SHADER_SAMPLERS;
+constexpr u32 NUM_COMPUTE_SHADER_SAMPLERS = VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS;
+
+// Image descriptors churn per draw, so they are allocated from a fence-tracked ring rather than rewritten in place.
+constexpr u32 NUM_IMAGE_DESCRIPTORS = 64 * 1024;
+
+// Sampler descriptors are keyed by SamplerState and only written when a new state first appears, so
+// a small fixed table owned by the object cache is enough.
+constexpr u32 NUM_SAMPLER_DESCRIPTORS = 1024;
 }  // namespace Deko3D

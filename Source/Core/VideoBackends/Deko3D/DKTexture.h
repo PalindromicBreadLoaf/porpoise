@@ -27,6 +27,10 @@ public:
 
   static std::unique_ptr<DKTexture> Create(const TextureConfig& config, std::string_view name);
 
+  // Wraps an image whose memory belongs to someone else.
+  static std::unique_ptr<DKTexture>
+  CreateAdopted(const TextureConfig& config, const dk::ImageLayout& layout, const dk::Image& image);
+
   static DkImageFormat GetDkFormatForHostTextureFormat(AbstractTextureFormat format);
 
   void CopyRectangleFromTexture(const AbstractTexture* src,
@@ -92,7 +96,16 @@ public:
   Create(DKTexture* color_attachment, DKTexture* depth_attachment,
          std::vector<AbstractTexture*> additional_color_attachments);
 
+  u32 GetNumberOfAdditionalAttachments() const
+  {
+    return static_cast<u32>(m_additional_color_attachments.size());
+  }
+
   // Binds this framebuffer's attachments as the queue's render targets.
   void Bind(DkCmdBuf cmdbuf) const;
+
+  // Drops every attachment from the sampler bindings,
+  // since nothing may be sampled while it is being rendered into.
+  void Unbind() const;
 };
 }  // namespace Deko3D

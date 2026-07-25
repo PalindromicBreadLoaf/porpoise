@@ -12,11 +12,15 @@ add_library(videodeko3d
   DKGfx.cpp
   DKGfx.h
   DKMain.cpp
+  DKObjectCache.cpp
+  DKObjectCache.h
   DKPerfQuery.h
   DKPipeline.cpp
   DKPipeline.h
   DKShader.cpp
   DKShader.h
+  DKStateTracker.cpp
+  DKStateTracker.h
   DKStreamBuffer.cpp
   DKStreamBuffer.h
   DKSwapChain.cpp
