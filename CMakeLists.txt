@@ -723,6 +723,7 @@ endif()
 if(ENABLE_DEKO3D)
   add_definitions(-DHAS_DEKO3D)
   include(Deko3D)
+  include(Uam)
 endif()
 
 if(NOT (WIN32 AND _M_ARM_64) AND NOT PORPOISE)

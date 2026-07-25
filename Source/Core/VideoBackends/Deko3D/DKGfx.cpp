@@ -13,6 +13,7 @@
 #include "VideoBackends/Deko3D/DKObjectCache.h"
 #include "VideoBackends/Deko3D/DKPipeline.h"
 #include "VideoBackends/Deko3D/DKShader.h"
+#include "VideoBackends/Deko3D/DKShaderCompiler.h"
 #include "VideoBackends/Deko3D/DKStateTracker.h"
 #include "VideoBackends/Deko3D/DKSwapChain.h"
 #include "VideoBackends/Deko3D/DKTexture.h"
@@ -77,12 +78,16 @@ DKGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* dep
 }
 
 std::unique_ptr<AbstractShader>
-DKGfx::CreateShaderFromSource(ShaderStage stage, std::string_view /*source*/,
+DKGfx::CreateShaderFromSource(ShaderStage stage, std::string_view source,
                               VideoCommon::ShaderIncluder* /*shader_includer*/,
-                              std::string_view /*name*/)
+                              std::string_view name)
 {
-  // TODO: deko3d accepts only DKSH.
-  return std::make_unique<DKShader>(stage);
+  // TODO: uam has no #include support, so graphics-mod shaders that use the includer will not resolve.
+  const auto dksh = ShaderCompiler::CompileShader(stage, source, name);
+  if (!dksh)
+    return nullptr;
+
+  return DKShader::CreateFromBinary(stage, dksh->data(), dksh->size(), name);
 }
 
 std::unique_ptr<AbstractShader> DKGfx::CreateShaderFromBinary(ShaderStage stage, const void* data,

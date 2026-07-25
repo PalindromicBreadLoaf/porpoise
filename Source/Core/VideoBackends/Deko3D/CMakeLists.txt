@@ -19,6 +19,8 @@ add_library(videodeko3d
   DKPipeline.h
   DKShader.cpp
   DKShader.h
+  DKShaderCompiler.cpp
+  DKShaderCompiler.h
   DKStateTracker.cpp
   DKStateTracker.h
   DKStreamBuffer.cpp
@@ -31,9 +33,12 @@ add_library(videodeko3d
   DKVertexFormat.h
   DKVertexManager.cpp
   DKVertexManager.h
+  UamBridge.h
   VideoBackend.h
 )
 
+# UamBridge.cpp is deliberately absent above as it is compiled into the isolated uam blob instead, so
+# that it can see uam's headers without the rest of the backend seeing uam's mesa (See CMake/Uam.cmake).
 target_link_libraries(videodeko3d
 PUBLIC
   common
@@ -41,4 +46,5 @@ PUBLIC
 
 PRIVATE
   deko3d
+  uam
 )

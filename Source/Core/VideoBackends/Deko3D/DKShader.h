@@ -23,8 +23,6 @@ class DKShader final : public AbstractShader
 public:
   DKShader(ShaderStage stage, std::vector<u8> dksh, dk::UniqueMemBlock code_block,
            const DkShader& shader);
-  // Placeholder for a stage whose DKSH is not available yet.
-  explicit DKShader(ShaderStage stage);
   ~DKShader() override;
 
   // The pipeline bakes this into its captured bind commands.

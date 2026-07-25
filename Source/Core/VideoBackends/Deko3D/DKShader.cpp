@@ -29,10 +29,6 @@ struct DkshHeader
 };
 }  // namespace
 
-DKShader::DKShader(ShaderStage stage) : AbstractShader(stage)
-{
-}
-
 DKShader::DKShader(ShaderStage stage, std::vector<u8> dksh, dk::UniqueMemBlock code_block,
                    const DkShader& shader)
     : AbstractShader(stage), m_dksh(std::move(dksh)), m_code_block(std::move(code_block)),
