@@ -47,6 +47,16 @@ DkAttribFormat VarToDkFormat(ComponentFormat t, u32 components, bool integer)
     return {sizes_32[idx], DkVtxAttribType_Float};
   }
 }
+
+// deko3d pads the attribute slots past the ones it is handed with this, and only those.
+DkVtxAttribState MakeUnusedAttribute()
+{
+  DkVtxAttribState attr{};
+  attr.isFixed = 1;
+  attr.size = DkVtxAttribSize_1x32;
+  attr.type = DkVtxAttribType_Float;
+  return attr;
+}
 }  // namespace
 
 DKVertexFormat::DKVertexFormat(const PortableVertexDeclaration& vtx_decl)
@@ -54,6 +64,7 @@ DKVertexFormat::DKVertexFormat(const PortableVertexDeclaration& vtx_decl)
 {
   m_buffer_state.stride = static_cast<u32>(m_decl.stride);
   m_buffer_state.divisor = 0;
+  m_attributes.fill(MakeUnusedAttribute());
   MapAttributes();
 }
 

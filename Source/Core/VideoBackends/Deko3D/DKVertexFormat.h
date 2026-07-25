@@ -34,8 +34,8 @@ private:
   void MapAttributes();
   void AddAttribute(u32 location, DkVtxAttribSize size, DkVtxAttribType type, u32 offset);
 
-  // Value-initialised so unused locations stay disabled and, crucially, the anonymous padding bits
-  // are zeroed.
+  // Locations MapAttributes leaves alone hold deko3d's inactive encoding, not zeroes.
+  // Zeroes cause crashes and crashes aren't fun.
   std::array<DkVtxAttribState, MAX_VERTEX_ATTRIBUTES> m_attributes{};
   DkVtxBufferState m_buffer_state{};
 };
