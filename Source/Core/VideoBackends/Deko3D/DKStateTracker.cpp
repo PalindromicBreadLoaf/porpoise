@@ -102,6 +102,10 @@ bool DKStateTracker::Initialize()
   m_utility_ubo = dummy_extents;
   m_ssbo = dummy_extents;
 
+  // A non-indexed draw still flushes the index binding, and the GPU faults on an address wider
+  // than 40 bits when the method is written rather than when indices are fetched.
+  m_index_buffer_addr = dummy_extents.addr;
+
   m_dummy_texture = DKTexture::Create(TextureConfig(1, 1, 1, 1, 1, AbstractTextureFormat::RGBA8, 0,
                                                     AbstractTextureType::Texture_2DArray),
                                       "dummy");
