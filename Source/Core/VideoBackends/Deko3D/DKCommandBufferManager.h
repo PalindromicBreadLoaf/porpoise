@@ -39,6 +39,9 @@ public:
 
   void WaitForFenceCounter(u64 fence_counter);
 
+  // Makes the fence for the current command buffer flush GPU writes for CPU readback.
+  void NotifyCpuReadback();
+
   // Submits the current command buffer and rotates to the next one.
   void SubmitCommandBuffer(bool wait_for_completion, DKSwapChain* present_swap_chain = nullptr,
                            int present_slot = -1);
@@ -81,6 +84,7 @@ private:
     DkFence fence = {};
     u64 fence_counter = 0;
     bool init_cmdbuf_used = false;
+    bool needs_cpu_readback = false;
 
     std::vector<std::function<void()>> cleanup_resources;
   };

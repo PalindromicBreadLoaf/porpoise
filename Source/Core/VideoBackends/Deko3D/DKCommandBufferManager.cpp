@@ -150,6 +150,11 @@ void DKCommandBufferManager::DeferCleanup(std::function<void()> cleanup)
   m_command_buffers[m_current_cmd_buffer].cleanup_resources.push_back(std::move(cleanup));
 }
 
+void DKCommandBufferManager::NotifyCpuReadback()
+{
+  m_command_buffers[m_current_cmd_buffer].needs_cpu_readback = true;
+}
+
 void DKCommandBufferManager::SubmitCommandBuffer(bool wait_for_completion,
                                                  DKSwapChain* present_swap_chain, int present_slot)
 {
@@ -162,9 +167,7 @@ void DKCommandBufferManager::SubmitCommandBuffer(bool wait_for_completion,
 
   queue.submitCommands(resources.draw.cmdbuf.finishList());
 
-  // Readbacks perform their required copy-engine-to-3D switch and L2 invalidation at the copy site.
-  // The fence only has to order completion here.
-  queue.signalFence(resources.fence, false);
+  queue.signalFence(resources.fence, resources.needs_cpu_readback);
 
   // Submitted work does not begin executing until the queue is flushed.
   if (present_swap_chain)
@@ -190,6 +193,7 @@ void DKCommandBufferManager::BeginCommandBuffer()
   resources.init.Rewind();
   resources.draw.Rewind();
   resources.init_cmdbuf_used = false;
+  resources.needs_cpu_readback = false;
   resources.fence_counter = m_next_fence_counter++;
   m_current_cmd_buffer = next_buffer_index;
 }

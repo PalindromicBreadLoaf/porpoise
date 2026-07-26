@@ -14,6 +14,7 @@ add_library(videodeko3d
   DKMain.cpp
   DKObjectCache.cpp
   DKObjectCache.h
+  DKPerfQuery.cpp
   DKPerfQuery.h
   DKPipeline.cpp
   DKPipeline.h
