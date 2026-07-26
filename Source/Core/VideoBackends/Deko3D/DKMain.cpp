@@ -60,8 +60,9 @@ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
   // in-process compilation only once per shader.
   g_backend_info.bSupportsShaderBinaries = true;
 
+  g_backend_info.bSupportsBBox = true;
+
   // TODO: enable once the corresponding deko3d paths land.
-  g_backend_info.bSupportsBBox = false;
   g_backend_info.bSupportsPaletteConversion = false;
   g_backend_info.bSupportsGPUTextureDecoding = false;
   g_backend_info.bSupportsST3CTextures = false;

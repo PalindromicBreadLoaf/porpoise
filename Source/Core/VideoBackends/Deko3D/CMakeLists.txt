@@ -4,6 +4,7 @@
 
 add_library(videodeko3d
   Constants.h
+  DKBoundingBox.cpp
   DKBoundingBox.h
   DKCommandBufferManager.cpp
   DKCommandBufferManager.h
