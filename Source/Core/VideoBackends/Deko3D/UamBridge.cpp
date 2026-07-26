@@ -71,6 +71,20 @@ void* BuildDksh(const DekoCompiler& compiler, size_t* out_size)
   *out_size = total;
   return blob;
 }
+
+void ReleaseCompilerOutput(DekoCompiler& compiler)
+{
+  std::free(compiler.m_info.bin.code);
+  std::free(compiler.m_info.bin.relocData);
+  std::free(compiler.m_info.bin.fixupData);
+  std::free(compiler.m_info.bin.syms);
+
+  compiler.m_info.bin.code = nullptr;
+  compiler.m_info.bin.relocData = nullptr;
+  compiler.m_info.bin.fixupData = nullptr;
+  compiler.m_info.bin.syms = nullptr;
+  compiler.m_code = nullptr;
+}
 }  // namespace
 
 // compiler_iface.cpp is compiled with the two glsl_frontend entry points redirected here.
@@ -106,6 +120,7 @@ void* UamCompileGlsl(const char* glsl, int stage, size_t* out_size, char** out_l
     DekoCompiler compiler{static_cast<pipeline_stage>(stage)};
     if (compiler.CompileGlsl(glsl))
       dksh = BuildDksh(compiler, out_size);
+    ReleaseCompilerOutput(compiler);
   }
 
   if (log)
