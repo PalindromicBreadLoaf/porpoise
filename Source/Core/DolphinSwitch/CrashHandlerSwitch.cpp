@@ -79,8 +79,8 @@ private:
 };
 
 // A `brk` reaches the same handler as an actual fault, but Horizon reports it as an instruction
-// abort, which sends you looking for a bad jump that never happened for hours on end which ends up being
-// a huge waste of time and no I'm not salty.
+// abort, which sends you looking for a bad jump that never happened for hours on end which ends up
+// being a huge waste of time and no I'm not salty.
 constexpr u32 ESR_EC_BRK_AARCH64 = 0x3C;
 constexpr u32 BRK_BUILTIN_TRAP = 1000;
 
@@ -111,11 +111,78 @@ const char* DescribeError(u32 error_desc)
     return "unknown";
   }
 }
+
+size_t GetReadableWordCount(u64 address, size_t maximum)
+{
+  if ((address & (alignof(u64) - 1)) != 0)
+    return 0;
+
+  MemoryInfo memory_info{};
+  u32 page_info;
+  if (R_FAILED(svcQueryMemory(&memory_info, &page_info, address)) ||
+      (memory_info.perm & Perm_R) == 0 || address < memory_info.addr)
+  {
+    return 0;
+  }
+
+  const u64 offset = address - memory_info.addr;
+  if (offset > memory_info.size)
+    return 0;
+
+  const u64 available = memory_info.size - offset;
+  const size_t count = static_cast<size_t>(available / sizeof(u64));
+  return count < maximum ? count : maximum;
+}
+
+void DumpSavedFrame(DumpWriter& out, u64 frame_pointer, u64 module_base, u64 module_end)
+{
+  if (GetReadableWordCount(frame_pointer, 2) < 2)
+  {
+    out.Printf("saved frame at %016lx is not readable\n", frame_pointer);
+    return;
+  }
+
+  const volatile u64* frame = reinterpret_cast<const volatile u64*>(frame_pointer);
+  const u64 saved_frame_pointer = frame[0];
+  const u64 caller = frame[1];
+  if (caller >= module_base && caller < module_end)
+  {
+    out.Printf("saved fp %016lx  caller %016lx (+%lx)\n", saved_frame_pointer, caller,
+               caller - module_base);
+  }
+  else
+  {
+    out.Printf("saved fp %016lx  caller %016lx\n", saved_frame_pointer, caller);
+  }
+}
+
+void DumpStack(DumpWriter& out, u64 stack_pointer, u64 module_base, u64 module_end)
+{
+  constexpr size_t maximum_words = 32;
+  const size_t word_count = GetReadableWordCount(stack_pointer, maximum_words);
+  if (word_count == 0)
+  {
+    out.Printf("stack at %016lx is not readable\n", stack_pointer);
+    return;
+  }
+
+  out.Printf("stack dump (%zu words):\n", word_count);
+  const volatile u64* stack = reinterpret_cast<const volatile u64*>(stack_pointer);
+  for (size_t i = 0; i < word_count; ++i)
+  {
+    const u64 value = stack[i];
+    if (value >= module_base && value < module_end)
+      out.Printf("  +%03zx %016lx  module +%lx\n", i * sizeof(u64), value, value - module_base);
+    else
+      out.Printf("  +%03zx %016lx\n", i * sizeof(u64), value);
+  }
+}
 }  // namespace
 
 // switch.ld places _start at 0, so its runtime address is the load base and subtracting it from
 // pc turns the dump into something addr2line can resolve against porpoise.elf.
 extern "C" void _start();
+extern "C" char __end__[];
 
 extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx);
 
@@ -163,12 +230,27 @@ extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx)
   }
 
   const u64 module_base = reinterpret_cast<u64>(&_start);
+  const u64 module_end = reinterpret_cast<u64>(__end__);
   out.Printf("module base %016lx\n", module_base);
-  if (ctx->pc.x >= module_base)
-    out.Printf("pc +%lx  lr +%lx  (aarch64-none-elf-addr2line -e porpoise.elf)\n",
-               ctx->pc.x - module_base, ctx->lr.x - module_base);
+  if (ctx->pc.x >= module_base && ctx->pc.x < module_end)
+  {
+    if (ctx->lr.x >= module_base && ctx->lr.x < module_end)
+      out.Printf("pc +%lx  lr +%lx  (aarch64-none-elf-addr2line -e porpoise.elf)\n",
+                 ctx->pc.x - module_base, ctx->lr.x - module_base);
+    else
+      out.Printf("pc +%lx  lr outside module  (aarch64-none-elf-addr2line -e porpoise.elf)\n",
+                 ctx->pc.x - module_base);
+  }
   else
-    out.Printf("pc is below the module base; the jump left our image.\n");
+  {
+    out.Printf("pc is outside the module.\n");
+  }
+
+  if (threadExceptionIsAArch64(ctx))
+  {
+    DumpSavedFrame(out, ctx->fp.x, module_base, module_end);
+    DumpStack(out, ctx->sp.x, module_base, module_end);
+  }
 
   if (fd >= 0)
   {
@@ -191,7 +273,6 @@ extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx)
 // next thread to call into one of those aborts inside libnx, and since it is the second abort that
 // reaches the kernel, that is the thread the crash report describes. The original one is gone by
 // then, along with any indication that it ever existed, which makes debugging incredible annoying.
-// Breaking, instead freezes every thread where it stands, so the report is of the abort that actually happened.
 extern "C" void abort()
 {
   const int fd = open(CRASH_LOG_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0666);
