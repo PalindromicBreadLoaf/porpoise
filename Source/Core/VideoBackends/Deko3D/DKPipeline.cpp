@@ -24,6 +24,15 @@ namespace
 // The captured state block is tiny, but leave generous headroom.
 constexpr u32 MAX_CAPTURE_WORDS = 1024;
 
+u32 GetDkBlendFactorSetting(DkBlendFactor factor)
+{
+  // Keep this in sync with deko3d's private getBlendFactorSetting().
+  u32 result = static_cast<u32>(factor) & 0x1f;
+  if ((static_cast<u32>(factor) & 0x20) != 0)
+    result |= 0xc000;
+  return result;
+}
+
 DkMsMode GetDkMsMode(u32 samples)
 {
   switch (samples)
@@ -275,6 +284,30 @@ std::unique_ptr<DKPipeline> DKPipeline::Create(const AbstractPipelineConfig& con
   std::lock_guard capture_guard(g_dk_object_cache->GetPipelineCaptureMutex());
   DkCmdBuf scratch = g_dk_object_cache->GetPipelineCaptureCommandBuffer();
 
+  // deko3d's dkCmdBufBindBlendStates() writes dstColorBlendFactor into FuncAlphaDst.
+  // Capture that command sequence and replace the incorrect final word for every render target.
+  constexpr u32 BLEND_STATE_WORDS = 7;
+  const u32 expected_blend_words = BLEND_STATE_WORDS * num_attachments;
+  // CmdBufWriter treats an exactly-full capture as exhausted (`pos + size >= end`).
+  std::vector<u32> blend_commands(expected_blend_words + 1);
+  dkCmdBufBeginCaptureCmds(scratch, blend_commands.data(),
+                           static_cast<u32>(blend_commands.size()));
+  dkCmdBufBindBlendStates(scratch, 0, blend_states.data(),
+                          static_cast<u32>(blend_states.size()));
+  const u32 num_blend_words = dkCmdBufEndCaptureCmds(scratch);
+  if (num_blend_words != expected_blend_words)
+  {
+    PanicAlertFmt("Unexpected deko3d blend command size: got {}, expected {}", num_blend_words,
+                  expected_blend_words);
+    return nullptr;
+  }
+  blend_commands.resize(num_blend_words);
+  for (u32 i = 0; i < num_attachments; ++i)
+  {
+    blend_commands[i * BLEND_STATE_WORDS + 6] =
+        GetDkBlendFactorSetting(blend_states[i].dstAlphaBlendFactor);
+  }
+
   std::vector<u32> storage(MAX_CAPTURE_WORDS);
   dkCmdBufBeginCaptureCmds(scratch, storage.data(), static_cast<u32>(storage.size()));
 
@@ -283,7 +316,7 @@ std::unique_ptr<DKPipeline> DKPipeline::Create(const AbstractPipelineConfig& con
   dkCmdBufBindMultisampleState(scratch, &multisample);
   dkCmdBufBindColorState(scratch, &color);
   dkCmdBufBindColorWriteState(scratch, &color_write);
-  dkCmdBufBindBlendStates(scratch, 0, blend_states.data(), static_cast<u32>(blend_states.size()));
+  dkCmdBufReplayCmds(scratch, blend_commands.data(), static_cast<u32>(blend_commands.size()));
   dkCmdBufBindDepthStencilState(scratch, &depth_stencil);
   if (vertex_format)
   {
