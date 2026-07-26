@@ -45,7 +45,9 @@ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
   g_backend_info.bSupportsDynamicSamplerIndexing = true;
   g_backend_info.bSupportsFragmentStoresAndAtomics = true;
   g_backend_info.bSupportsCopyToVram = true;
-  g_backend_info.bSupportsDepthClamp = true;
+  // Enabling Deko3D's rasterizer depth clamp causes unstable clipping and widespread flickering.
+  // This didn't take 12 hours straight to find. Why would you ask that?
+  g_backend_info.bSupportsDepthClamp = false;
   g_backend_info.bSupportsReversedDepthRange = true;
   g_backend_info.bSupportsLogicOp = true;
   g_backend_info.bSupportsMultithreading = false;
