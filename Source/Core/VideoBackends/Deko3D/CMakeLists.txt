@@ -34,6 +34,7 @@ add_library(videodeko3d
   DKVertexManager.cpp
   DKVertexManager.h
   UamBridge.h
+  UamStderr.h
   VideoBackend.h
 )
 

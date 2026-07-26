@@ -29,6 +29,8 @@
 
 namespace
 {
+thread_local FILE* s_uam_stderr = nullptr;
+
 constexpr uint32_t Align256(uint32_t x)
 {
   return (x + 0xFF) & ~0xFFu;
@@ -87,6 +89,11 @@ void ReleaseCompilerOutput(DekoCompiler& compiler)
 }
 }  // namespace
 
+extern "C" FILE* UamGetStderr()
+{
+  return s_uam_stderr ? s_uam_stderr : UamGetSystemStderr();
+}
+
 // compiler_iface.cpp is compiled with the two glsl_frontend entry points redirected here.
 void UamFrontendInitOnce()
 {
@@ -107,28 +114,25 @@ void* UamCompileGlsl(const char* glsl, int stage, size_t* out_size, char** out_l
   *out_size = 0;
   *out_log = nullptr;
 
-  // Redirect stderr to the log so that we can get actual warnings from uam.
+  // Capture UAM's diagnostics without replacing the stderr stream.
   char* log_buffer = nullptr;
   size_t log_length = 0;
   FILE* log = open_memstream(&log_buffer, &log_length);
-  FILE* saved_stderr = stderr;
-  if (log)
-    stderr = log;
+  if (!log)
+    return nullptr;
 
   void* dksh = nullptr;
+  s_uam_stderr = log;
   {
     DekoCompiler compiler{static_cast<pipeline_stage>(stage)};
     if (compiler.CompileGlsl(glsl))
       dksh = BuildDksh(compiler, out_size);
     ReleaseCompilerOutput(compiler);
   }
+  s_uam_stderr = nullptr;
 
-  if (log)
-  {
-    stderr = saved_stderr;
-    std::fclose(log);
-    *out_log = log_buffer;
-  }
+  std::fclose(log);
+  *out_log = log_buffer;
 
   return dksh;
 }

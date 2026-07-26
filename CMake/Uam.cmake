@@ -268,8 +268,9 @@ set(_uam_sources
 list(TRANSFORM _uam_sources PREPEND "${UAM_ROOT}/")
 
 set(_uam_bridge "${CMAKE_SOURCE_DIR}/Source/Core/VideoBackends/Deko3D/UamBridge.cpp")
+set(_uam_stderr "${CMAKE_SOURCE_DIR}/Source/Core/VideoBackends/Deko3D/UamStderr.h")
 
-add_library(uam_objects STATIC ${_uam_sources} ${_uam_generated} "${_uam_bridge}")
+add_library(uam_objects STATIC ${_uam_sources} ${_uam_generated} "${_uam_bridge}" "${_uam_stderr}")
 
 target_include_directories(uam_objects PRIVATE
   "${_uam_gen}"
@@ -296,7 +297,7 @@ set_target_properties(uam_objects PROPERTIES
   CXX_EXTENSIONS ON
   INTERPROCEDURAL_OPTIMIZATION OFF
 )
-target_compile_options(uam_objects PRIVATE -w -fno-lto)
+target_compile_options(uam_objects PRIVATE -w -fno-lto -include "${_uam_stderr}")
 
 # (See UamBridge.cpp) Keep mesa's builtin function table alive across compiles.
 set_source_files_properties("${UAM_ROOT}/source/compiler_iface.cpp" PROPERTIES
