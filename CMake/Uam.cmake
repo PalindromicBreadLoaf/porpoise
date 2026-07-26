@@ -304,9 +304,14 @@ set_source_files_properties("${UAM_ROOT}/source/compiler_iface.cpp" PROPERTIES
   COMPILE_DEFINITIONS "glsl_frontend_init=UamFrontendInitOnce;glsl_frontend_exit=UamFrontendExitOnce")
 
 set(_uam_isolated "${CMAKE_BINARY_DIR}/uam-generated/uam_isolated.o")
+# mesa's C++ drags in libstdc++ template instantiations that Dolphin also instantiates, and those
+# arrive in COMDAT groups. Localising a group's symbols does not stop the group from winning the
+# duplicate-elimination against Dolphin's own copy, which leaves Dolphin calling a symbol that is
+# now local to this blob. Why does every bug in this project take me so long to figure out?
 add_custom_command(
   OUTPUT "${_uam_isolated}"
-  COMMAND "${CMAKE_LINKER}" -r --whole-archive "$<TARGET_FILE:uam_objects>" --no-whole-archive
+  COMMAND "${CMAKE_LINKER}" -r --force-group-allocation
+          --whole-archive "$<TARGET_FILE:uam_objects>" --no-whole-archive
           -o "${_uam_isolated}.tmp"
   COMMAND "${CMAKE_OBJCOPY}" --keep-global-symbol=UamCompileGlsl "${_uam_isolated}.tmp"
           "${_uam_isolated}"
