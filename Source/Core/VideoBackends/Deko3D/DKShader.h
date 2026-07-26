@@ -49,11 +49,13 @@ public:
   // Taken by anything that records the code's address into a command buffer.
   const std::shared_ptr<DKShaderCode>& GetCode() const { return m_code; }
 
-  // Returns the DKSH blob for the disk shader cache.
+  // Returns a versioned DKSH blob for the disk shader cache.
   BinaryData GetBinary() const override;
 
   static std::unique_ptr<DKShader> CreateFromBinary(ShaderStage stage, const void* data,
                                                     size_t length, std::string_view name);
+  static std::unique_ptr<DKShader> CreateFromCacheBinary(ShaderStage stage, const void* data,
+                                                         size_t length, std::string_view name);
 
 private:
   std::vector<u8> m_dksh;

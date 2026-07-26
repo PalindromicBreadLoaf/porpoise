@@ -17,6 +17,8 @@ namespace Deko3D
 namespace
 {
 constexpr u32 DKSH_MAGIC = 0x48534B44;  // 'DKSH'
+constexpr u32 DKSH_CACHE_MAGIC = 0x434B4444;  // 'DDKC'
+constexpr u32 DKSH_CACHE_VERSION = 1;
 
 // Header at the start of every DKSH blob.
 struct DkshHeader
@@ -27,6 +29,14 @@ struct DkshHeader
   u32 code_sz;
   u32 programs_off;
   u32 num_programs;
+};
+
+// Keep a backend version beside each cached binary so compiler changes cannot
+// silently reuse old Maxwell code.
+struct DkshCacheFooter
+{
+  u32 magic;
+  u32 version;
 };
 }  // namespace
 
@@ -49,7 +59,11 @@ DKShader::~DKShader() = default;
 
 AbstractShader::BinaryData DKShader::GetBinary() const
 {
-  return m_dksh;
+  BinaryData binary = m_dksh;
+  const DkshCacheFooter footer{DKSH_CACHE_MAGIC, DKSH_CACHE_VERSION};
+  const u8* footer_bytes = reinterpret_cast<const u8*>(&footer);
+  binary.insert(binary.end(), footer_bytes, footer_bytes + sizeof(footer));
+  return binary;
 }
 
 std::unique_ptr<DKShader> DKShader::CreateFromBinary(ShaderStage stage, const void* data,
@@ -107,5 +121,19 @@ std::unique_ptr<DKShader> DKShader::CreateFromBinary(ShaderStage stage, const vo
 
   return std::make_unique<DKShader>(stage, std::move(dksh),
                                     std::make_shared<DKShaderCode>(std::move(code_block), shader));
+}
+
+std::unique_ptr<DKShader> DKShader::CreateFromCacheBinary(ShaderStage stage, const void* data,
+                                                          size_t length, std::string_view name)
+{
+  if (length < sizeof(DkshCacheFooter))
+    return nullptr;
+
+  DkshCacheFooter footer;
+  std::memcpy(&footer, static_cast<const u8*>(data) + length - sizeof(footer), sizeof(footer));
+  if (footer.magic != DKSH_CACHE_MAGIC || footer.version != DKSH_CACHE_VERSION)
+    return nullptr;
+
+  return CreateFromBinary(stage, data, length - sizeof(footer), name);
 }
 }  // namespace Deko3D

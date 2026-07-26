@@ -94,7 +94,7 @@ DKGfx::CreateShaderFromSource(ShaderStage stage, std::string_view source,
 std::unique_ptr<AbstractShader> DKGfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                               size_t length, std::string_view name)
 {
-  return DKShader::CreateFromBinary(stage, data, length, name);
+  return DKShader::CreateFromCacheBinary(stage, data, length, name);
 }
 
 std::unique_ptr<NativeVertexFormat>
