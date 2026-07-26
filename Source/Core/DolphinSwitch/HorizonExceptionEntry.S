@@ -147,18 +147,6 @@ __libnx_exception_entry:
   ldr w2, [x4, #DUMP_PSTATE]
   str w2, [x1, #FRAME_PSTATE]
 
-  ldr x6, [x4, #SLOT_INDEX]
-  mov w5, #1
-  lsl w5, w5, w6
-  mvn w5, w5
-  adrp x2, s_slots_in_use
-  add x2, x2, :lo12:s_slots_in_use
-.Lrelease:
-  ldaxr w3, [x2]
-  and w3, w3, w5
-  stlxr w7, w3, [x2]
-  cbnz w7, .Lrelease
-
   add x3, x4, #DUMP_FPU
   ldp q0, q1, [x3, #0x000]
   ldp q2, q3, [x3, #0x020]
@@ -188,6 +176,20 @@ __libnx_exception_entry:
   ldp x25, x26, [x4, #(DUMP_GPRS + 0xC8)]
   ldp x27, x28, [x4, #(DUMP_GPRS + 0xD8)]
   ldr x29, [x4, #DUMP_FP]
+
+  // x0-x8 are restored from the kernel frame. Use them to release the slot only after every
+  // register stored in it has been reloaded.
+  ldr x6, [x4, #SLOT_INDEX]
+  mov w5, #1
+  lsl w5, w5, w6
+  mvn w5, w5
+  adrp x2, s_slots_in_use
+  add x2, x2, :lo12:s_slots_in_use
+.Lrelease:
+  ldaxr w3, [x2]
+  and w3, w3, w5
+  stlxr w7, w3, [x2]
+  cbnz w7, .Lrelease
 
   mov w0, wzr
   svc #SVC_RETURN_FROM_EXCEPTION
