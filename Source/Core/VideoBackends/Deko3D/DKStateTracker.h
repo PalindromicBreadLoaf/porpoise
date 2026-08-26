@@ -22,7 +22,8 @@ class DKShaderCode;
 class DKStreamBuffer;
 class DKTexture;
 
-// Collects the bindings Dolphin sets between draws and flushes the ones that changed to the command buffer.
+// Collects the bindings Dolphin sets between draws and flushes the ones that changed to the command
+// buffer.
 class DKStateTracker
 {
 public:
@@ -35,6 +36,21 @@ public:
 
   DKFramebuffer* GetFramebuffer() const { return m_framebuffer; }
   const DKPipeline* GetPipeline() const { return m_pipeline; }
+
+  // Draws recorded and draws dropped by reason.
+  struct DrawCounts
+  {
+    u64 recorded = 0;
+    u64 no_pipeline = 0;
+    u64 invalid_pipeline = 0;
+    u64 no_framebuffer = 0;
+    u64 no_descriptors = 0;
+  };
+
+  const DrawCounts& GetDrawCounts() const { return m_draw_counts; }
+  void ResetDrawCounts() { m_draw_counts = {}; }
+  const DkScissor& GetScissor() const { return m_scissor; }
+  const DkViewport& GetViewport() const { return m_viewport; }
 
   void SetVertexBuffer(DkGpuAddr addr, u32 size);
   void SetIndexBuffer(DkGpuAddr addr, DkIdxFormat format);
@@ -51,6 +67,8 @@ public:
   // Points every binding of this texture at the dummy, so a texture about to be destroyed or reused
   // as a render target is not left bound for sampling.
   void UnbindTexture(const DKTexture* texture);
+
+  void UnbindFramebuffer(const DKFramebuffer* framebuffer);
 
   void SetViewport(const DkViewport& viewport);
   void SetScissor(const DkScissor& scissor);
@@ -144,9 +162,9 @@ private:
   DkViewport m_viewport = {0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
   DkScissor m_scissor = {0, 0, 1, 1};
 
-  // Ring of image descriptors, bound once as a whole set. Handles index into it absolutely, so
-  // allocating a fresh run per binding change is what keeps the GPU from reading a descriptor the
-  // CPU has already overwritten.
+  DrawCounts m_draw_counts;
+
+  // Ring of image descriptors, bound once as a whole set.
   std::unique_ptr<DKStreamBuffer> m_image_descriptors;
 
   // Stands in for bindings a shader declares but Dolphin has not filled in.

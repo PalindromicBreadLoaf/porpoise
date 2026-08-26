@@ -13,6 +13,7 @@
 #include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
 #include "VideoBackends/Deko3D/DKGfx.h"
+#include "VideoBackends/Deko3D/DKMemoryTracker.h"
 #include "VideoBackends/Deko3D/DKObjectCache.h"
 #include "VideoBackends/Deko3D/DKPipeline.h"
 #include "VideoBackends/Deko3D/DKShader.h"
@@ -80,7 +81,8 @@ void DKStateTracker::DestroyInstance()
 
 bool DKStateTracker::Initialize()
 {
-  m_image_descriptors = DKStreamBuffer::Create(NUM_IMAGE_DESCRIPTORS * sizeof(DkImageDescriptor));
+  m_image_descriptors = DKStreamBuffer::Create(NUM_IMAGE_DESCRIPTORS * sizeof(DkImageDescriptor),
+                                               "image descriptors");
   if (!m_image_descriptors)
   {
     PanicAlertFmt("Failed to allocate the deko3d image descriptor set");
@@ -96,6 +98,8 @@ bool DKStateTracker::Initialize()
     PanicAlertFmt("Failed to allocate the deko3d dummy uniform buffer");
     return false;
   }
+
+  MemoryTracker::RegisterMemBlock(m_dummy_buffer, "dummy uniform/storage buffer");
 
   const DkBufExtents dummy_extents{m_dummy_buffer.getGpuAddr(), DUMMY_BUFFER_SIZE};
   m_gx_ubos.fill(dummy_extents);
@@ -334,6 +338,15 @@ void DKStateTracker::UnbindTexture(const DKTexture* texture)
   }
 }
 
+void DKStateTracker::UnbindFramebuffer(const DKFramebuffer* framebuffer)
+{
+  if (m_framebuffer != framebuffer)
+    return;
+
+  m_framebuffer = nullptr;
+  m_dirty_flags |= DIRTY_FLAG_FRAMEBUFFER;
+}
+
 void DKStateTracker::SetViewport(const DkViewport& viewport)
 {
   if (std::memcmp(&m_viewport, &viewport, sizeof(viewport)) == 0)
@@ -397,12 +410,8 @@ void DKStateTracker::ClearFramebuffer(const DkScissor& area, u32 color_mask,
   BindFramebuffer();
 
   DkCmdBuf cmdbuf = g_dk_command_buffer_mgr->GetCurrentCommandBuffer();
-  if (std::memcmp(&m_scissor, &area, sizeof(area)) != 0)
-  {
-    m_scissor = area;
-    dkCmdBufSetScissors(cmdbuf, 0, &m_scissor, 1);
-  }
-  m_dirty_flags &= ~DIRTY_FLAG_SCISSOR;
+  dkCmdBufSetScissors(cmdbuf, 0, &area, 1);
+  m_dirty_flags |= DIRTY_FLAG_SCISSOR;
 
   if (color_mask != 0 && m_framebuffer->HasColorBuffer())
   {
@@ -470,13 +479,29 @@ void DKStateTracker::UpdateUniformBuffers(DkCmdBuf cmdbuf)
 
 bool DKStateTracker::Bind()
 {
-  if (!m_pipeline || !m_pipeline->IsValid() || !m_framebuffer)
+  if (!m_pipeline)
+  {
+    m_draw_counts.no_pipeline++;
     return false;
+  }
+  if (!m_pipeline->IsValid())
+  {
+    m_draw_counts.invalid_pipeline++;
+    return false;
+  }
+  if (!m_framebuffer)
+  {
+    m_draw_counts.no_framebuffer++;
+    return false;
+  }
 
   // Descriptors are written before anything is recorded, because running out of ring space submits
   // the command buffer and invalidates everything below.
   if ((m_dirty_flags & DIRTY_FLAG_TEXTURES) && !PrepareTextureHandles())
+  {
+    m_draw_counts.no_descriptors++;
     return false;
+  }
 
   DkCmdBuf cmdbuf = g_dk_command_buffer_mgr->GetCurrentCommandBuffer();
 
@@ -527,6 +552,7 @@ bool DKStateTracker::Bind()
   m_dirty_flags &=
       ~(DIRTY_FLAG_STATIC_STATE | DIRTY_FLAG_PIPELINE | DIRTY_FLAG_INDEX_BUFFER |
         DIRTY_FLAG_VIEWPORT | DIRTY_FLAG_SCISSOR | DIRTY_FLAG_TEXTURES | DIRTY_FLAG_SSBO);
+  m_draw_counts.recorded++;
   return true;
 }
 

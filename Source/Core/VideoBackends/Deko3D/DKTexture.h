@@ -91,6 +91,7 @@ public:
                 std::vector<AbstractTexture*> additional_color_attachments,
                 AbstractTextureFormat color_format, AbstractTextureFormat depth_format, u32 width,
                 u32 height, u32 layers, u32 samples);
+  ~DKFramebuffer() override;
 
   static std::unique_ptr<DKFramebuffer>
   Create(DKTexture* color_attachment, DKTexture* depth_attachment,

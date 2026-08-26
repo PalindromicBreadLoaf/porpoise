@@ -16,6 +16,7 @@
 #include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
 #include "VideoBackends/Deko3D/DKGfx.h"
+#include "VideoBackends/Deko3D/DKMemoryTracker.h"
 #include "VideoBackends/Deko3D/DKObjectCache.h"
 #include "VideoBackends/Deko3D/DKStateTracker.h"
 #include "VideoBackends/Deko3D/DKStreamBuffer.h"
@@ -66,6 +67,13 @@ DKTexture::DKTexture(const TextureConfig& config, dk::UniqueMemBlock memblock,
 
 DKTexture::~DKTexture()
 {
+  if (DKStateTracker* state_tracker = DKStateTracker::GetInstance())
+    state_tracker->UnbindTexture(this);
+
+  // Adopted images do not own their memory, so only the ones that do stop being tracked here.
+  if (m_memblock)
+    MemoryTracker::Unregister(dkImageGetGpuAddr(&m_image));
+
   DeferMemBlockDestruction(std::move(m_memblock));
 }
 
@@ -153,6 +161,11 @@ std::unique_ptr<DKTexture> DKTexture::Create(const TextureConfig& config, std::s
   dk::ImageView view{image};
   DkImageDescriptor descriptor{};
   dkImageDescriptorInitialize(&descriptor, &view, config.IsComputeImage(), false);
+
+  MemoryTracker::Register(dkImageGetGpuAddr(&image), layout.getSize(),
+                          fmt::format("image '{}' {}x{}x{} fmt {} rt {}", name, config.width,
+                                      config.height, config.layers, static_cast<int>(config.format),
+                                      config.IsRenderTarget()));
 
   return std::make_unique<DKTexture>(config, std::move(memblock), layout, image, descriptor);
 }
@@ -278,6 +291,7 @@ void DKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
     }
 
     upload_addr = upload.getGpuAddr();
+    MemoryTracker::RegisterMemBlock(upload, "texture upload staging block");
     std::memcpy(upload.getCpuAddr(), buffer, upload_size);
   }
 
@@ -290,7 +304,10 @@ void DKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
                             &dst_rect, 0);
 
   if (upload)
+  {
+    MemoryTracker::UnregisterMemBlock(upload);
     DeferMemBlockDestruction(std::move(upload));
+  }
 }
 
 DKStagingTexture::DKStagingTexture(StagingTextureType type, const TextureConfig& config,
@@ -303,6 +320,7 @@ DKStagingTexture::DKStagingTexture(StagingTextureType type, const TextureConfig&
 
 DKStagingTexture::~DKStagingTexture()
 {
+  MemoryTracker::UnregisterMemBlock(m_memblock);
   DeferMemBlockDestruction(std::move(m_memblock));
 }
 
@@ -326,6 +344,10 @@ std::unique_ptr<DKStagingTexture> DKStagingTexture::Create(StagingTextureType ty
     ERROR_LOG_FMT(VIDEO, "deko3d: failed to allocate a {} byte staging texture", buffer_size);
     return nullptr;
   }
+
+  MemoryTracker::RegisterMemBlock(memblock,
+                                  fmt::format("staging texture {}x{} type {}", config.width,
+                                              config.height, static_cast<int>(type)));
 
   return std::make_unique<DKStagingTexture>(type, config, std::move(memblock));
 }
@@ -423,6 +445,15 @@ DKFramebuffer::DKFramebuffer(AbstractTexture* color_attachment, AbstractTexture*
                           std::move(additional_color_attachments), color_format, depth_format,
                           width, height, layers, samples)
 {
+}
+
+DKFramebuffer::~DKFramebuffer()
+{
+  // Render targets stay bound on the queue until something marks the framebuffer dirty.
+  if (DKGfx* gfx = DKGfx::GetInstance())
+    gfx->OnFramebufferDestroyed(this);
+  if (DKStateTracker* state_tracker = DKStateTracker::GetInstance())
+    state_tracker->UnbindFramebuffer(this);
 }
 
 std::unique_ptr<DKFramebuffer>

@@ -5,6 +5,7 @@
 #include "VideoBackends/Deko3D/DKGfx.h"
 
 #include <algorithm>
+#include <string>
 
 #include "Common/Logging/Log.h"
 
@@ -147,6 +148,12 @@ void DKGfx::BindFramebuffer(DKFramebuffer* framebuffer)
   framebuffer->Unbind();
   DKStateTracker::GetInstance()->SetFramebuffer(framebuffer);
   m_current_framebuffer = framebuffer;
+}
+
+void DKGfx::OnFramebufferDestroyed(const AbstractFramebuffer* framebuffer)
+{
+  if (m_current_framebuffer == framebuffer)
+    m_current_framebuffer = nullptr;
 }
 
 void DKGfx::SetFramebuffer(AbstractFramebuffer* framebuffer)
@@ -296,7 +303,10 @@ bool DKGfx::BindBackbuffer(const ClearColor& clear_color)
 
   m_current_slot = m_swap_chain->Acquire();
   if (m_current_slot < 0)
+  {
+    ERROR_LOG_FMT(VIDEO, "deko3d: could not acquire a swapchain image");
     return false;
+  }
 
   SetAndClearFramebuffer(m_swap_chain->GetFramebuffer(m_current_slot), clear_color);
   return true;
@@ -305,12 +315,48 @@ bool DKGfx::BindBackbuffer(const ClearColor& clear_color)
 void DKGfx::PresentBackbuffer()
 {
   // Presenting flushes the queue, kicking off everything recorded this frame.
-  if (m_swap_chain && m_current_slot >= 0)
+  const bool reaches_screen = m_swap_chain && m_current_slot >= 0;
+  if (reaches_screen)
     g_dk_command_buffer_mgr->SubmitCommandBuffer(false, m_swap_chain.get(), m_current_slot);
   else
     g_dk_command_buffer_mgr->SubmitCommandBuffer(false);
 
   m_current_slot = -1;
+
+  m_presents++;
+  m_presents_reaching_screen += reaches_screen ? 1 : 0;
+  if (m_presents >= PRESENT_REPORT_INTERVAL)
+    ReportFrameStatistics();
+}
+
+void DKGfx::ReportFrameStatistics()
+{
+  DKStateTracker* state_tracker = DKStateTracker::GetInstance();
+  const DKStateTracker::DrawCounts& draws = state_tracker->GetDrawCounts();
+  const DkScissor& scissor = state_tracker->GetScissor();
+  const DkViewport& viewport = state_tracker->GetViewport();
+  const u64 dropped =
+      draws.no_pipeline + draws.invalid_pipeline + draws.no_framebuffer + draws.no_descriptors;
+  const DKFramebuffer* framebuffer = state_tracker->GetFramebuffer();
+
+  const std::string report = fmt::format(
+      "deko3d: {}/{} frames presented, {} draws, {} dropped (pipeline {}/{}, framebuffer {}, "
+      "descriptors {}), fences {}/{}, target {}x{}, scissor {}+{} {}x{}, viewport {}+{} {}x{}",
+      m_presents_reaching_screen, m_presents, draws.recorded, dropped, draws.no_pipeline,
+      draws.invalid_pipeline, draws.no_framebuffer, draws.no_descriptors,
+      g_dk_command_buffer_mgr->GetCompletedFenceCounter(),
+      g_dk_command_buffer_mgr->GetCurrentFenceCounter(), framebuffer ? framebuffer->GetWidth() : 0,
+      framebuffer ? framebuffer->GetHeight() : 0, scissor.x, scissor.y, scissor.width,
+      scissor.height, viewport.x, viewport.y, viewport.width, viewport.height);
+
+  if (m_presents_reaching_screen != m_presents || draws.recorded == 0 || dropped != 0)
+    WARN_LOG_FMT(VIDEO, "{}", report);
+  else
+    NOTICE_LOG_FMT(VIDEO, "{}", report);
+
+  m_presents = 0;
+  m_presents_reaching_screen = 0;
+  state_tracker->ResetDrawCounts();
 }
 
 SurfaceInfo DKGfx::GetSurfaceInfo() const
