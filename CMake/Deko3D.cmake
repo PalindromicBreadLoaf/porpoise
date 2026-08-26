@@ -2,23 +2,17 @@
 # Copyright 2026 PalindromicBreadLoaf (palindromicbreadloaf@tuta.com)
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-set(_deko3d_debug_default OFF)
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(_deko3d_debug_default ON)
-endif()
-option(DEKO3D_DEBUG "Link the debug build of deko3d" ${_deko3d_debug_default})
-
 set(DEKO3D_INCLUDE_DIR "${DEVKITPRO}/libnx/include")
 set(DEKO3D_LIB_DIR "${DEVKITPRO}/libnx/lib")
-
-if(DEKO3D_DEBUG)
-  set(DEKO3D_LIBRARY "${DEKO3D_LIB_DIR}/libdeko3dd.a")
-else()
-  set(DEKO3D_LIBRARY "${DEKO3D_LIB_DIR}/libdeko3d.a")
-endif()
+set(DEKO3D_DEBUG_LIBRARY "${DEKO3D_LIB_DIR}/libdeko3dd.a")
+set(DEKO3D_RELEASE_LIBRARY "${DEKO3D_LIB_DIR}/libdeko3d.a")
 
 set(_deko3d_missing "")
-foreach(_f "${DEKO3D_INCLUDE_DIR}/deko3d.h" "${DEKO3D_INCLUDE_DIR}/deko3d.hpp" "${DEKO3D_LIBRARY}")
+foreach(_f
+        "${DEKO3D_INCLUDE_DIR}/deko3d.h"
+        "${DEKO3D_INCLUDE_DIR}/deko3d.hpp"
+        "${DEKO3D_DEBUG_LIBRARY}"
+        "${DEKO3D_RELEASE_LIBRARY}")
   if(NOT EXISTS "${_f}")
     list(APPEND _deko3d_missing "${_f}")
   endif()
@@ -33,5 +27,8 @@ endif()
 
 add_library(deko3d INTERFACE)
 target_include_directories(deko3d INTERFACE "${DEKO3D_INCLUDE_DIR}")
-target_link_libraries(deko3d INTERFACE "${DEKO3D_LIBRARY}")
+target_link_libraries(deko3d INTERFACE
+  "$<$<CONFIG:Debug>:${DEKO3D_DEBUG_LIBRARY}>"
+  "$<$<NOT:$<CONFIG:Debug>>:${DEKO3D_RELEASE_LIBRARY}>"
+)
 target_compile_definitions(deko3d INTERFACE DK_HPP_SUPPORT_VECTOR)
