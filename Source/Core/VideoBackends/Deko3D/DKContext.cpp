@@ -6,6 +6,9 @@
 
 #include "Common/Logging/Log.h"
 
+#include "VideoBackends/Deko3D/Constants.h"
+#include "VideoBackends/Deko3D/DKMemoryTracker.h"
+
 namespace Deko3D
 {
 std::unique_ptr<DKContext> g_dk_context;
@@ -34,8 +37,10 @@ bool DKContext::Initialize()
     return false;
   }
 
-  m_queue =
-      dk::QueueMaker{m_device}.setFlags(DkQueueFlags_Graphics | DkQueueFlags_Compute).create();
+  m_queue = dk::QueueMaker{m_device}
+                .setFlags(DkQueueFlags_Graphics | DkQueueFlags_Compute)
+                .setPerWarpScratchMemorySize(PER_WARP_SCRATCH_MEMORY_SIZE)
+                .create();
   if (!m_queue)
   {
     ERROR_LOG_FMT(VIDEO, "deko3d: failed to create queue");
@@ -60,5 +65,7 @@ void DKContext::DebugCallback(void* /*user_data*/, const char* context, DkResult
   else
     ERROR_LOG_FMT(VIDEO, "deko3d error [{}] (result {}): {}", context, static_cast<int>(result),
                   message);
+
+  MemoryTracker::ReportFaultMessage(message);
 }
 }  // namespace Deko3D

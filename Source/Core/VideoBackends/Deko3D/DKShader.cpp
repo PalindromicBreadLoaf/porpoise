@@ -9,14 +9,16 @@
 #include "Common/Align.h"
 #include "Common/Logging/Log.h"
 
+#include "VideoBackends/Deko3D/Constants.h"
 #include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKMemoryTracker.h"
 
 namespace Deko3D
 {
 namespace
 {
-constexpr u32 DKSH_MAGIC = 0x48534B44;  // 'DKSH'
+constexpr u32 DKSH_MAGIC = 0x48534B44;        // 'DKSH'
 constexpr u32 DKSH_CACHE_MAGIC = 0x434B4444;  // 'DDKC'
 constexpr u32 DKSH_CACHE_VERSION = 1;
 
@@ -38,6 +40,44 @@ struct DkshCacheFooter
   u32 magic;
   u32 version;
 };
+
+// Leading fields of deko3d's DkshProgramHeader.
+struct DkshProgramHeader
+{
+  u32 type;
+  u32 entrypoint;
+  u32 num_gprs;
+  u32 constbuf1_off;
+  u32 constbuf1_sz;
+  u32 per_warp_scratch_sz;
+};
+constexpr u32 DKSH_PROGRAM_HEADER_SIZE = 64;
+
+bool ScratchMemoryFits(const u8* control, const DkshHeader& header, std::string_view name)
+{
+  if (header.programs_off > header.control_sz ||
+      (header.control_sz - header.programs_off) / DKSH_PROGRAM_HEADER_SIZE < header.num_programs)
+  {
+    ERROR_LOG_FMT(VIDEO, "deko3d: '{}' has a truncated DKSH program table", name);
+    return false;
+  }
+
+  for (u32 i = 0; i < header.num_programs; i++)
+  {
+    DkshProgramHeader program;
+    std::memcpy(&program, control + header.programs_off + i * DKSH_PROGRAM_HEADER_SIZE,
+                sizeof(program));
+    if (program.per_warp_scratch_sz > PER_WARP_SCRATCH_MEMORY_SIZE)
+    {
+      ERROR_LOG_FMT(VIDEO,
+                    "deko3d: '{}' spills {} bytes per warp, more than the {} the queue reserves",
+                    name, program.per_warp_scratch_sz, PER_WARP_SCRATCH_MEMORY_SIZE);
+      return false;
+    }
+  }
+
+  return true;
+}
 }  // namespace
 
 DKShaderCode::DKShaderCode(dk::UniqueMemBlock block, const DkShader& shader)
@@ -47,6 +87,7 @@ DKShaderCode::DKShaderCode(dk::UniqueMemBlock block, const DkShader& shader)
 
 DKShaderCode::~DKShaderCode()
 {
+  MemoryTracker::UnregisterMemBlock(m_block);
   DeferMemBlockDestruction(std::move(m_block));
 }
 
@@ -87,6 +128,9 @@ std::unique_ptr<DKShader> DKShader::CreateFromBinary(ShaderStage stage, const vo
     return nullptr;
   }
 
+  if (!ScratchMemoryFits(dksh.data(), header, name))
+    return nullptr;
+
   // The last DK_SHADER_CODE_UNUSABLE_SIZE bytes of any code block cannot hold shader code,
   // so pad the allocation past the code section.
   const u32 block_size = static_cast<u32>(
@@ -102,6 +146,8 @@ std::unique_ptr<DKShader> DKShader::CreateFromBinary(ShaderStage stage, const vo
     ERROR_LOG_FMT(VIDEO, "deko3d: failed to allocate {} bytes of shader code memory", block_size);
     return nullptr;
   }
+
+  MemoryTracker::RegisterMemBlock(code_block, fmt::format("shader code '{}'", name));
 
   // The code section follows the control section in the blob. Only it is copied to GPU code
   // memory. Deko3d reads the control section from the CPU-side copy during initialization.

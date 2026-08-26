@@ -32,6 +32,13 @@ constexpr u32 STAGING_TEXTURE_UPLOAD_THRESHOLD = 4 * 1024 * 1024;
 // Maximum number of vertex attributes, matching the Vulkan backend.
 constexpr u32 MAX_VERTEX_ATTRIBUTES = 16;
 
+// Shader local ("scratch") memory each warp slot gets.
+constexpr u32 PER_WARP_SCRATCH_MEMORY_SIZE = 32 * 1024;
+
+// How many presents between frame statistics reports.
+// TODO: diagnostic scaffolding for the black screen.
+constexpr u32 PRESENT_REPORT_INTERVAL = 120;
+
 // Uniform buffers for GX pipelines. The same buffer is bound at the same index on every stage that
 // reads it.
 constexpr u32 UBO_BINDING_PS = 0;
