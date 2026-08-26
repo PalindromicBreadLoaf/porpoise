@@ -90,7 +90,7 @@ endif()
 option(USE_UPNP "Enables UPnP port mapping support" ON)
 option(ENABLE_NOGUI "Enable NoGUI frontend" ON)
 option(ENABLE_QT "Enable Qt (Default)" ON)
-option(ENABLE_LTO "Enables Link Time Optimization" OFF)
+option(ENABLE_LTO "Enables Link Time Optimization" ${PORPOISE})
 option(ENABLE_GENERIC "Enables generic build that should run on any little-endian host" OFF)
 option(ENABLE_HEADLESS "Enables running Dolphin as a headless variant" OFF)
 option(ENABLE_ALSA "Enables ALSA sound backend" ON)
@@ -513,8 +513,6 @@ if(PORPOISE)
   set(ENCODE_FRAMEDUMPS 0)
   set(USE_MGBA 0)
   set(DSPTOOL 0)
-
-  set(ENABLE_LTO 1)
 
   # Always build what we vendor.
   set(USE_SYSTEM_LIBS OFF)
