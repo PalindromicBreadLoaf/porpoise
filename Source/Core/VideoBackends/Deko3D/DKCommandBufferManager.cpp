@@ -12,6 +12,7 @@
 #include "Common/Logging/Log.h"
 
 #include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKMemoryTracker.h"
 #include "VideoBackends/Deko3D/DKSwapChain.h"
 
 namespace Deko3D
@@ -44,6 +45,7 @@ void DKCommandBufferManager::CommandMemory::Grow(size_t min_req_size)
                       .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached)
                       .create();
     chunk.size = size;
+    MemoryTracker::RegisterMemBlock(chunk.block, "command memory growth chunk");
   }
 
   cmdbuf.addMemory(chunk.block, 0, chunk.size);
@@ -97,6 +99,8 @@ bool DKCommandBufferManager::CreateCommandBuffers()
     ERROR_LOG_FMT(VIDEO, "deko3d: failed to allocate {} bytes of command memory", total_size);
     return false;
   }
+
+  MemoryTracker::RegisterMemBlock(m_command_memory, "command memory");
 
   u32 offset = 0;
   const auto create = [&](CommandMemory& mem, u32 size) {
@@ -206,23 +210,15 @@ void DKCommandBufferManager::WaitForCommandBufferCompletion(u32 index)
   if (res != DkResult_Success)
     ERROR_LOG_FMT(VIDEO, "deko3d: dkFenceWait failed ({})", static_cast<int>(res));
 
-  // Clean up resources for every command buffer between the last known completed one and this one.
   const u64 now_completed_counter = resources.fence_counter;
-  u32 cleanup_index = (m_current_cmd_buffer + 1) % NUM_COMMAND_BUFFERS;
-  while (cleanup_index != m_current_cmd_buffer)
+  for (CmdBufferResources& retired : m_command_buffers)
   {
-    CmdBufferResources& cleanup_resources = m_command_buffers[cleanup_index];
-    if (cleanup_resources.fence_counter > now_completed_counter)
-      break;
+    if (retired.fence_counter > now_completed_counter)
+      continue;
 
-    if (cleanup_resources.fence_counter > m_completed_fence_counter)
-    {
-      for (auto& cleanup : cleanup_resources.cleanup_resources)
-        cleanup();
-      cleanup_resources.cleanup_resources.clear();
-    }
-
-    cleanup_index = (cleanup_index + 1) % NUM_COMMAND_BUFFERS;
+    for (auto& cleanup : retired.cleanup_resources)
+      cleanup();
+    retired.cleanup_resources.clear();
   }
 
   m_completed_fence_counter = now_completed_counter;
@@ -232,6 +228,12 @@ void DKCommandBufferManager::WaitForFenceCounter(u64 fence_counter)
 {
   if (m_completed_fence_counter >= fence_counter)
     return;
+
+  if (fence_counter >= m_command_buffers[m_current_cmd_buffer].fence_counter)
+  {
+    SubmitCommandBuffer(true);
+    return;
+  }
 
   // Find the first command buffer that covers the counter we are waiting for.
   u32 index = (m_current_cmd_buffer + 1) % NUM_COMMAND_BUFFERS;
