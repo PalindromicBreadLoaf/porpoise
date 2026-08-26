@@ -13,6 +13,8 @@ add_library(videodeko3d
   DKGfx.cpp
   DKGfx.h
   DKMain.cpp
+  DKMemoryTracker.cpp
+  DKMemoryTracker.h
   DKObjectCache.cpp
   DKObjectCache.h
   DKPerfQuery.cpp

@@ -42,9 +42,9 @@ bool DKVertexManager::Initialize()
   if (!VertexManagerBase::Initialize())
     return false;
 
-  m_vertex_stream_buffer = DKStreamBuffer::Create(VERTEX_STREAM_BUFFER_SIZE);
-  m_index_stream_buffer = DKStreamBuffer::Create(INDEX_STREAM_BUFFER_SIZE);
-  m_uniform_stream_buffer = DKStreamBuffer::Create(UNIFORM_STREAM_BUFFER_SIZE);
+  m_vertex_stream_buffer = DKStreamBuffer::Create(VERTEX_STREAM_BUFFER_SIZE, "vertex");
+  m_index_stream_buffer = DKStreamBuffer::Create(INDEX_STREAM_BUFFER_SIZE, "index");
+  m_uniform_stream_buffer = DKStreamBuffer::Create(UNIFORM_STREAM_BUFFER_SIZE, "uniform");
   if (!m_vertex_stream_buffer || !m_index_stream_buffer || !m_uniform_stream_buffer)
   {
     PanicAlertFmt("Failed to allocate deko3d streaming buffers");

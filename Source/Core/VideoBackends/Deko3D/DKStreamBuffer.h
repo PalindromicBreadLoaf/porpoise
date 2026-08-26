@@ -6,6 +6,7 @@
 
 #include <deque>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include <deko3d.hpp>
@@ -20,7 +21,8 @@ class DKStreamBuffer
 public:
   ~DKStreamBuffer();
 
-  static std::unique_ptr<DKStreamBuffer> Create(u32 size);
+  // The name only ever shows up in diagnostics.
+  static std::unique_ptr<DKStreamBuffer> Create(u32 size, std::string name);
 
   DkGpuAddr GetGpuAddr() const { return m_gpu_addr; }
   DkGpuAddr GetCurrentGpuAddr() const { return m_gpu_addr + m_current_offset; }
@@ -35,7 +37,7 @@ public:
   void CommitMemory(u32 final_num_bytes);
 
 private:
-  explicit DKStreamBuffer(u32 size);
+  DKStreamBuffer(u32 size, std::string name);
 
   bool Allocate();
   void UpdateCurrentFencePosition();
@@ -43,6 +45,7 @@ private:
   bool WaitForClearSpace(u32 num_bytes);
 
   u32 m_size;
+  std::string m_name;
   u32 m_current_offset = 0;
   u32 m_current_gpu_position = 0;
   u32 m_last_allocation_size = 0;

@@ -14,6 +14,7 @@
 #include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
 #include "VideoBackends/Deko3D/DKGfx.h"
+#include "VideoBackends/Deko3D/DKMemoryTracker.h"
 #include "VideoBackends/Deko3D/DKStateTracker.h"
 #include "VideoBackends/Deko3D/DKStreamBuffer.h"
 
@@ -33,12 +34,15 @@ bool DKBoundingBox::Initialize()
                           .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached |
                                     DkMemBlockFlags_ZeroFillInit)
                           .create();
-  m_upload_buffer = DKStreamBuffer::Create(UPLOAD_BUFFER_SIZE);
+  m_upload_buffer = DKStreamBuffer::Create(UPLOAD_BUFFER_SIZE, "bounding box upload");
   if (!m_gpu_buffer || !m_readback_buffer || !m_upload_buffer)
   {
     PanicAlertFmt("Failed to allocate the deko3d bounding box buffers.");
     return false;
   }
+
+  MemoryTracker::RegisterMemBlock(m_gpu_buffer, "bounding box");
+  MemoryTracker::RegisterMemBlock(m_readback_buffer, "bounding box readback");
 
   m_readback_pointer = static_cast<BBoxType*>(m_readback_buffer.getCpuAddr());
   DKStateTracker::GetInstance()->SetSSBO(m_gpu_buffer.getGpuAddr(), BUFFER_SIZE);

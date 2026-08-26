@@ -12,6 +12,7 @@
 #include "Common/Logging/Log.h"
 
 #include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKMemoryTracker.h"
 #include "VideoBackends/Deko3D/DKTexture.h"
 
 #include "VideoCommon/TextureConfig.h"
@@ -77,6 +78,9 @@ bool DKSwapChain::Initialize()
     m_images[i].initialize(layout, m_image_memblock, static_cast<u32>(aligned_size * i));
     image_ptrs[i] = &m_images[i];
 
+    MemoryTracker::Register(dkImageGetGpuAddr(&m_images[i]), image_size,
+                            fmt::format("swapchain image {}", i));
+
     m_textures[i] = DKTexture::CreateAdopted(config, layout, m_images[i]);
     m_framebuffers[i] = DKFramebuffer::Create(m_textures[i].get(), nullptr, {});
     if (!m_framebuffers[i])
@@ -102,6 +106,8 @@ void DKSwapChain::Destroy()
   if (g_dk_context)
     g_dk_context->WaitIdle();
   m_swapchain = nullptr;
+  for (const dk::Image& image : m_images)
+    MemoryTracker::Unregister(dkImageGetGpuAddr(&image));
   for (auto& framebuffer : m_framebuffers)
     framebuffer.reset();
   for (auto& texture : m_textures)

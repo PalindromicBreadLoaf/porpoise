@@ -11,6 +11,7 @@
 #include "Common/Logging/Log.h"
 
 #include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKMemoryTracker.h"
 #include "VideoBackends/Deko3D/DKStreamBuffer.h"
 
 namespace Deko3D
@@ -43,10 +44,12 @@ bool DKObjectCache::Initialize()
     return false;
   }
 
+  MemoryTracker::RegisterMemBlock(m_descriptor_block, "sampler descriptors");
+
   m_descriptors = static_cast<DkSamplerDescriptor*>(m_descriptor_block.getCpuAddr());
   m_descriptor_set_addr = m_descriptor_block.getGpuAddr();
 
-  m_texture_upload_buffer = DKStreamBuffer::Create(TEXTURE_UPLOAD_BUFFER_SIZE);
+  m_texture_upload_buffer = DKStreamBuffer::Create(TEXTURE_UPLOAD_BUFFER_SIZE, "texture upload");
   if (!m_texture_upload_buffer)
   {
     ERROR_LOG_FMT(VIDEO, "deko3d: failed to allocate the texture upload ring");

@@ -13,6 +13,7 @@
 #include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
 #include "VideoBackends/Deko3D/DKGfx.h"
+#include "VideoBackends/Deko3D/DKMemoryTracker.h"
 #include "VideoBackends/Deko3D/DKStateTracker.h"
 
 #include "VideoCommon/FramebufferManager.h"
@@ -38,6 +39,8 @@ bool DKPerfQuery::Initialize()
     PanicAlertFmt("Failed to allocate the deko3d performance query buffer.");
     return false;
   }
+
+  MemoryTracker::RegisterMemBlock(m_query_memblock, "performance query reports");
 
   m_query_results = static_cast<CounterReport*>(m_query_memblock.getCpuAddr());
   ResetQuery();

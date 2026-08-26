@@ -11,18 +11,19 @@
 
 #include "VideoBackends/Deko3D/DKCommandBufferManager.h"
 #include "VideoBackends/Deko3D/DKContext.h"
+#include "VideoBackends/Deko3D/DKMemoryTracker.h"
 
 namespace Deko3D
 {
-DKStreamBuffer::DKStreamBuffer(u32 size) : m_size(size)
+DKStreamBuffer::DKStreamBuffer(u32 size, std::string name) : m_size(size), m_name(std::move(name))
 {
 }
 
 DKStreamBuffer::~DKStreamBuffer() = default;
 
-std::unique_ptr<DKStreamBuffer> DKStreamBuffer::Create(u32 size)
+std::unique_ptr<DKStreamBuffer> DKStreamBuffer::Create(u32 size, std::string name)
 {
-  std::unique_ptr<DKStreamBuffer> buffer(new DKStreamBuffer(size));
+  std::unique_ptr<DKStreamBuffer> buffer(new DKStreamBuffer(size, std::move(name)));
   if (!buffer->Allocate())
     return nullptr;
 
@@ -38,9 +39,12 @@ bool DKStreamBuffer::Allocate()
                    .create();
   if (!m_memblock)
   {
-    ERROR_LOG_FMT(VIDEO, "deko3d: failed to allocate a {} byte stream buffer", m_size);
+    ERROR_LOG_FMT(VIDEO, "deko3d: failed to allocate the {} byte '{}' stream buffer", m_size,
+                  m_name);
     return false;
   }
+
+  MemoryTracker::RegisterMemBlock(m_memblock, fmt::format("stream buffer '{}'", m_name));
 
   m_gpu_addr = m_memblock.getGpuAddr();
   m_host_pointer = static_cast<u8*>(m_memblock.getCpuAddr());
