@@ -235,9 +235,97 @@ VkDescriptorSet CommandBufferManager::AllocateDescriptorSet(VkDescriptorSetLayou
   return descriptor_set;
 }
 
+bool CommandBufferManager::CreateTimestampPool()
+{
+  if (!g_vulkan_context->GetDeviceInfo().timestampComputeAndGraphics ||
+      g_vulkan_context->GetDeviceInfo().timestampPeriod <= 0.0f)
+  {
+    return false;
+  }
+
+  const VkQueryPoolCreateInfo create_info = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                                             nullptr,
+                                             0,
+                                             VK_QUERY_TYPE_TIMESTAMP,
+                                             static_cast<u32>(NUM_COMMAND_BUFFERS) * 2,
+                                             0};
+
+  const VkResult res = vkCreateQueryPool(g_vulkan_context->GetDevice(), &create_info, nullptr,
+                                         &m_timestamp_pool);
+  if (res != VK_SUCCESS)
+  {
+    LOG_VULKAN_ERROR(res, "vkCreateQueryPool failed: ");
+    m_timestamp_pool = VK_NULL_HANDLE;
+    return false;
+  }
+
+  return true;
+}
+
+void CommandBufferManager::WriteBeginTimestamp(u32 command_buffer_index)
+{
+  if (m_timestamp_pool == VK_NULL_HANDLE)
+    return;
+
+  const VkCommandBuffer command_buffer = m_command_buffers[command_buffer_index].command_buffers[1];
+  const u32 first_query = command_buffer_index * 2;
+
+  vkCmdResetQueryPool(command_buffer, m_timestamp_pool, first_query, 2);
+  vkCmdWriteTimestamp(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_timestamp_pool,
+                      first_query);
+  m_command_buffers[command_buffer_index].timestamps_written = false;
+}
+
+void CommandBufferManager::WriteEndTimestamp(u32 command_buffer_index)
+{
+  if (m_timestamp_pool == VK_NULL_HANDLE)
+    return;
+
+  CmdBufferResources& resources = m_command_buffers[command_buffer_index];
+  vkCmdWriteTimestamp(resources.command_buffers[1], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                      m_timestamp_pool, command_buffer_index * 2 + 1);
+  resources.timestamps_written = true;
+}
+
+void CommandBufferManager::CollectTimestamps(u32 command_buffer_index)
+{
+  CmdBufferResources& resources = m_command_buffers[command_buffer_index];
+  if (m_timestamp_pool == VK_NULL_HANDLE || !resources.timestamps_written)
+    return;
+
+  resources.timestamps_written = false;
+
+  std::array<u64, 2> timestamps;
+  const VkResult res = vkGetQueryPoolResults(
+      g_vulkan_context->GetDevice(), m_timestamp_pool, command_buffer_index * 2, 2,
+      sizeof(timestamps), timestamps.data(), sizeof(u64), VK_QUERY_RESULT_64_BIT);
+  if (res != VK_SUCCESS || timestamps[1] <= timestamps[0])
+    return;
+
+  const u64 busy_ns = static_cast<u64>((timestamps[1] - timestamps[0]) *
+                                       g_vulkan_context->GetDeviceInfo().timestampPeriod);
+  m_gpu_time_ns_since_present += busy_ns;
+  g_stats.gpu_busy_ns_total.fetch_add(busy_ns, std::memory_order_relaxed);
+}
+
+void CommandBufferManager::PublishFrameGpuTime()
+{
+  g_stats.gpu_frame_time_ms = static_cast<float>(m_gpu_time_ns_since_present) / 1.0e6f;
+  m_gpu_time_ns_since_present = 0;
+  g_stats.presents_total.fetch_add(1, std::memory_order_relaxed);
+}
+
 bool CommandBufferManager::CreateSubmitThread()
 {
   m_submit_thread.Reset("VK submission thread", [this](PendingCommandBufferSubmit submit) {
+#ifdef __SWITCH__
+    if (!m_submit_thread_pinned)
+    {
+      Common::PinCurrentThreadToRole(Common::ThreadCoreRole::Worker);
+      m_submit_thread_pinned = true;
+    }
+#endif
+
     SubmitCommandBuffer(submit.command_buffer_index, submit.present_swap_chain,
                         submit.present_image_index);
     CmdBufferResources& resources = m_command_buffers[submit.command_buffer_index];

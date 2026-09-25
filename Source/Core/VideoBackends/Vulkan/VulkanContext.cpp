@@ -437,7 +437,11 @@ void VulkanContext::PopulateBackendInfo(BackendInfo* backend_info)
   backend_info->bSupportsEarlyZ = true;                     // Assumed support.
   backend_info->bSupportsPrimitiveRestart = true;           // Assumed support.
   backend_info->bSupportsBindingLayout = false;             // Assumed support.
+#ifdef __SWITCH__
+  backend_info->bSupportsPaletteConversion = false;
+#else
   backend_info->bSupportsPaletteConversion = true;          // Assumed support.
+#endif
   backend_info->bSupportsClipControl = true;                // Assumed support.
   backend_info->bSupportsMultithreading = true;             // Assumed support.
   backend_info->bSupportsComputeShaders = true;             // Assumed support.

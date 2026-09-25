@@ -166,6 +166,12 @@ private:
   VkResult m_last_present_result = VK_SUCCESS;
   bool m_use_threaded_submission = false;
   u32 m_descriptor_set_count = DESCRIPTOR_SETS_PER_POOL;
+
+  VkQueryPool m_timestamp_pool = VK_NULL_HANDLE;
+  u64 m_gpu_time_ns_since_present = 0;
+#ifdef __SWITCH__
+  bool m_submit_thread_pinned = false;
+#endif
 };
 
 extern std::unique_ptr<CommandBufferManager> g_command_buffer_mgr;
