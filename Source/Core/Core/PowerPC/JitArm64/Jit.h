@@ -340,6 +340,11 @@ protected:
                                       UGeckoInstruction inst, BitSet32 gpr_caller_save,
                                       BitSet32 fpr_caller_save);
 
+  void ClearSPRSources();
+  void InvalidateSPRSources(BitSet32 written_gprs);
+  BitSet32 GetSPRSourceGPRs() const;
+  void LoadBranchTargetFromSPR(Arm64Gen::ARM64Reg dest, u32 spr);
+
   // Exits
   void
   WriteExit(u32 destination, bool LK = false, u32 exit_address_after_return = 0,
@@ -397,6 +402,9 @@ protected:
   Arm64FPRCache fpr;
 
   JitCommon::ConstantPropagation m_constant_propagation;
+
+  int m_lr_source_gpr = -1;
+  int m_ctr_source_gpr = -1;
 
   JitArm64BlockCache blocks{*this};
 
