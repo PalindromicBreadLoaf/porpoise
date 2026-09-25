@@ -3,6 +3,7 @@
 
 #include "Core/PowerPC/JitArm64/Jit.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <optional>
 #include <span>
@@ -201,6 +202,9 @@ void JitArm64::GenerateAsmAndResetFreeMemoryRanges()
 
   const u8* routines_near_end = GetCodePtr();
   const u8* routines_far_end = m_far_code.GetCodePtr();
+
+  m_routines_near_end.store(routines_near_end, std::memory_order_relaxed);
+  m_routines_far_end.store(routines_far_end, std::memory_order_relaxed);
 
   ResetFreeMemoryRanges(routines_near_end - routines_near_start,
                         routines_far_end - routines_far_start);
@@ -1100,6 +1104,78 @@ std::vector<JitBase::MemoryStats> JitArm64::GetMemoryStats() const
           {"near_1", m_free_ranges_near_1.get_stats()},
           {"far_0", m_free_ranges_far_0.get_stats()},
           {"far_1", m_free_ranges_far_1.get_stats()}};
+}
+
+std::vector<JitBase::CodeRegion> JitArm64::GetCodeRegions() const
+{
+  const std::pair<std::string_view, const u8*> labels[] = {
+      {"JIT asm: enter_code", enter_code},
+      {"JIT asm: dispatcher", dispatcher},
+      {"JIT asm: dispatcher_no_timing_check", dispatcher_no_timing_check},
+      {"JIT asm: dispatcher_no_check", dispatcher_no_check},
+      {"JIT asm: dispatcher_exit", dispatcher_exit},
+      {"JIT asm: do_timing", do_timing},
+      {"JIT asm: frsqrte", frsqrte},
+      {"JIT asm: fres", fres},
+      {"JIT asm: cdts", cdts},
+      {"JIT asm: cstd", cstd},
+      {"JIT asm: fprf_single", fprf_single},
+      {"JIT asm: fprf_double", fprf_double},
+      {"JIT asm: fmadds_eft", fmadds_eft},
+      {"JIT asm: ps_madd_eft", ps_madd_eft},
+      {"JIT asm: paired_load_quantized", reinterpret_cast<const u8*>(paired_load_quantized)},
+      {"JIT asm: single_load_quantized", reinterpret_cast<const u8*>(single_load_quantized)},
+      {"JIT asm: paired_store_quantized", reinterpret_cast<const u8*>(paired_store_quantized)},
+      {"JIT asm: single_store_quantized", reinterpret_cast<const u8*>(single_store_quantized)},
+  };
+
+  const auto append_routines = [&](std::vector<CodeRegion>& out, const u8* start, const u8* end) {
+    if (start >= end)
+      return;
+
+    std::vector<std::pair<std::string_view, const u8*>> in_range;
+    for (const auto& [name, address] : labels)
+    {
+      if (address >= start && address < end)
+        in_range.emplace_back(name, address);
+    }
+    std::sort(in_range.begin(), in_range.end(),
+              [](const auto& a, const auto& b) { return a.second < b.second; });
+
+    const u8* const first_label = in_range.empty() ? end : in_range.front().second;
+    if (first_label > start)
+      out.emplace_back("JIT asm: unlabelled", std::make_pair(start, first_label));
+
+    for (std::size_t i = 0; i < in_range.size(); ++i)
+    {
+      const u8* const region_end = i + 1 < in_range.size() ? in_range[i + 1].second : end;
+      if (in_range[i].second < region_end)
+        out.emplace_back(in_range[i].first, std::make_pair(in_range[i].second, region_end));
+    }
+  };
+
+  const u8* const routines_near_end = m_routines_near_end.load(std::memory_order_relaxed);
+  const u8* const routines_far_end = m_routines_far_end.load(std::memory_order_relaxed);
+
+  std::vector<CodeRegion> regions;
+  regions.emplace_back("JIT far code",
+                       std::make_pair(m_far_code_0.GetRegionStart(), m_far_code_0.GetRegionEnd()));
+  regions.emplace_back("JIT block code", std::make_pair(m_near_code_0.GetRegionStart(),
+                                                        m_near_code_0.GetRegionEnd()));
+  append_routines(regions, m_near_code_1.GetRegionStart(), routines_near_end);
+  regions.emplace_back("JIT block code",
+                       std::make_pair(routines_near_end, m_near_code_1.GetRegionEnd()));
+  append_routines(regions, m_far_code_1.GetRegionStart(), routines_far_end);
+  regions.emplace_back("JIT far code",
+                       std::make_pair(routines_far_end, m_far_code_1.GetRegionEnd()));
+
+  std::erase_if(regions, [](const CodeRegion& entry) {
+    return entry.second.first == nullptr || entry.second.first >= entry.second.second;
+  });
+  std::sort(regions.begin(), regions.end(), [](const CodeRegion& a, const CodeRegion& b) {
+    return a.second.first < b.second.first;
+  });
+  return regions;
 }
 
 std::size_t JitArm64::DisassembleNearCode(const JitBlock& block, std::ostream& stream) const

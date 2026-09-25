@@ -97,6 +97,9 @@ public:
     }
   }
 
+  const u8* GetRegionStart() const { return region; }
+  const u8* GetRegionEnd() const { return region + region_size; }
+
   bool IsInSpace(const u8* ptr) const { return ptr >= region && ptr < (region + region_size); }
   bool IsInSpaceOrChildSpace(const u8* ptr) const
   {

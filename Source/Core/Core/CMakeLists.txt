@@ -795,6 +795,13 @@ elseif(PORPOISE)
   )
 endif()
 
+if(PORPOISE)
+  target_sources(core PRIVATE
+    HorizonSampler.cpp
+    HorizonSampler.h
+  )
+endif()
+
 # Bluez doesn't support all the communication modes on FreeBSD, so only using it on Linux
 if(LINUX)
   option(ENABLE_BLUEZ "Enables bluetooth support" ON)

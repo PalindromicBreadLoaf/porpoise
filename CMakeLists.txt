@@ -520,6 +520,12 @@ if(PORPOISE)
   # newlib hides vasprintf and friends behind __GNU_VISIBLE.
   add_definitions(-D_GNU_SOURCE)
 
+  option(PORPOISE_FRAME_POINTERS "Keep frame pointers for the on-device profiler" OFF)
+  if(PORPOISE_FRAME_POINTERS)
+    add_compile_options(-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer)
+    add_compile_definitions(PORPOISE_FRAME_POINTERS)
+  endif()
+
   # Search only the toolchain for libraries and includes
   set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
   set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)

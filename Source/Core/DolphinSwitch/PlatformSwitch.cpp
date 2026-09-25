@@ -7,6 +7,7 @@
 #include "Common/Logging/Log.h"
 #include "Core/Core.h"
 #include "Core/HW/ProcessorInterface.h"
+#include "Core/HorizonSampler.h"
 #include "Core/IOS/IOS.h"
 #include "Core/IOS/STM/STM.h"
 #include "Core/System.h"
@@ -17,6 +18,8 @@ namespace
 {
 // This thread only pumps host messages, so anything tighter than a frame is wasted time.
 constexpr u64 HOST_POLL_INTERVAL_NS = 16'000'000;
+
+constexpr double PROFILE_CAPTURE_SECONDS = 10.0;
 }  // namespace
 
 PlatformSwitch::PlatformSwitch(PadState& pad) : m_pad(pad)
@@ -43,7 +46,7 @@ void PlatformSwitch::MainLoop()
 
     m_focused.store(appletGetFocusState() == AppletFocusState_InFocus, std::memory_order_relaxed);
 
-    PollHostInput();
+    PollHostInput(system);
     PollOperationMode();
     UpdateRunningFlag();
     Core::HostDispatchJobs(system);
@@ -52,7 +55,7 @@ void PlatformSwitch::MainLoop()
   }
 }
 
-void PlatformSwitch::PollHostInput()
+void PlatformSwitch::PollHostInput(Core::System& system)
 {
   padUpdate(&m_pad);
   const u64 buttons = padGetButtons(&m_pad);
@@ -68,6 +71,14 @@ void PlatformSwitch::PollHostInput()
   if (overlay_held && !m_overlay_chord_latched)
     PerfOverlay::CycleLevel();
   m_overlay_chord_latched = overlay_held;
+
+  constexpr u64 profile_chord = HidNpadButton_Minus | HidNpadButton_StickL;
+  const bool profile_held = (buttons & profile_chord) == profile_chord;
+  if (profile_held && !m_profile_chord_latched)
+    Core::HorizonSampler::Toggle(system, PROFILE_CAPTURE_SECONDS);
+  m_profile_chord_latched = profile_held;
+
+  Core::HorizonSampler::Poll(system);
 }
 
 void PlatformSwitch::PollOperationMode()

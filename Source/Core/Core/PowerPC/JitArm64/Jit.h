@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <map>
 #include <optional>
@@ -52,6 +53,7 @@ public:
 
   void EraseSingleBlock(const JitBlock& block) override;
   std::vector<MemoryStats> GetMemoryStats() const override;
+  std::vector<CodeRegion> GetCodeRegions() const override;
 
   std::size_t DisassembleNearCode(const JitBlock& block, std::ostream& stream) const override;
   std::size_t DisassembleFarCode(const JitBlock& block, std::ostream& stream) const override;
@@ -434,6 +436,9 @@ protected:
   Common::RangeSizeSet<u8*> m_free_ranges_near_1;
   Common::RangeSizeSet<u8*> m_free_ranges_far_0;
   Common::RangeSizeSet<u8*> m_free_ranges_far_1;
+
+  std::atomic<const u8*> m_routines_near_end{nullptr};
+  std::atomic<const u8*> m_routines_far_end{nullptr};
 
   std::unique_ptr<HostDisassembler> m_disassembler;
 };

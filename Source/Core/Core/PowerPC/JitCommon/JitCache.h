@@ -23,6 +23,14 @@
 
 class JitBase;
 
+struct JitCodeBlockRange
+{
+  const u8* start;
+  const u8* end;
+  u32 guest_address;
+  bool far_code;
+};
+
 // offsetof is only conditionally supported for non-standard layout types,
 // so this struct needs to have a standard layout.
 struct JitBlockData

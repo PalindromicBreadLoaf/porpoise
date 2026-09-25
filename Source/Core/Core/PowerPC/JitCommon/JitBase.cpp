@@ -332,3 +332,14 @@ bool JitBase::ShouldHandleFPExceptionForInstruction(const PPCAnalyst::CodeOp* op
   else
     return false;
 }
+
+std::vector<JitCodeBlockRange> JitBase::GetBlockRanges(const Core::CPUThreadGuard& guard)
+{
+  std::vector<JitCodeBlockRange> ranges;
+  GetBlockCache()->RunOnBlocks(guard, [&ranges](const JitBlock& block) {
+    ranges.emplace_back(block.near_begin, block.near_end, block.effectiveAddress, false);
+    if (block.far_begin != block.far_end)
+      ranges.emplace_back(block.far_begin, block.far_end, block.effectiveAddress, true);
+  });
+  return ranges;
+}

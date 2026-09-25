@@ -59,6 +59,7 @@
 #include "Core/HW/SystemTimers.h"
 #include "Core/HW/VideoInterface.h"
 #include "Core/HW/Wiimote.h"
+#include "Core/HorizonSampler.h"
 #include "Core/Host.h"
 #include "Core/IOS/IOS.h"
 #include "Core/MemTools.h"
@@ -330,6 +331,9 @@ static void CpuThread(Core::System& system, const std::optional<std::string>& sa
 
 #ifdef __SWITCH__
   Common::PinCurrentThreadToRole(Common::ThreadCoreRole::Cpu);
+
+  HorizonSampler::RegisterCpuThread();
+  Common::ScopeGuard sampler_guard([] { HorizonSampler::UnregisterCpuThread(); });
 #endif
 
   // This needs to be delayed until after the video backend is ready.

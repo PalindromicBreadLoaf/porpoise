@@ -35,6 +35,7 @@
 #include "Common/StringUtil.h"
 #endif
 #ifdef __SWITCH__
+#include "Common/HorizonThreadRegistry.h"
 #include "Common/Logging/Log.h"
 #endif
 
@@ -259,7 +260,7 @@ void SetCurrentThreadName(const char* name)
 #elif defined __HAIKU__
   rename_thread(find_thread(nullptr), name);
 #elif defined(__SWITCH__)
-  // Horizon threads carry no name the kernel or a debugger can see.
+  HorizonThreadRegistry::RegisterCurrentThread(name);
 #else
   // linux doesn't allow to set more than 16 bytes, including \0.
   pthread_setname_np(pthread_self(), std::string(name).substr(0, 15).c_str());

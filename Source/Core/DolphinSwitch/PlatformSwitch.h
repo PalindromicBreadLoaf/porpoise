@@ -14,6 +14,11 @@
 #include "Common/Flag.h"
 #include "Common/WindowSystemInfo.h"
 
+namespace Core
+{
+class System;
+}
+
 // Owns the libnx window and the host-side run loop, in the role DolphinNoGUI's Platform plays.
 class PlatformSwitch
 {
@@ -35,7 +40,7 @@ public:
 
 private:
   void UpdateRunningFlag();
-  void PollHostInput();
+  void PollHostInput(Core::System& system);
   void PollOperationMode();
 
   PadState& m_pad;
@@ -48,6 +53,8 @@ private:
 
   // Edge-detects the overlay-cycle chord.
   bool m_overlay_chord_latched = false;
+  // Edge-detects the profile-capture chord.
+  bool m_profile_chord_latched = false;
 
   // Read by Host_RendererHasFocus from the CPU and GPU threads.
   std::atomic<bool> m_focused{true};

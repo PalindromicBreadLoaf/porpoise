@@ -254,6 +254,20 @@ std::vector<JitBase::MemoryStats> JitInterface::GetMemoryStats() const
   return {};
 }
 
+std::vector<JitBase::CodeRegion> JitInterface::GetCodeRegions() const
+{
+  if (m_jit)
+    return m_jit->GetCodeRegions();
+  return {};
+}
+
+std::vector<JitCodeBlockRange> JitInterface::GetBlockRanges(const Core::CPUThreadGuard& guard) const
+{
+  if (m_jit)
+    return m_jit->GetBlockRanges(guard);
+  return {};
+}
+
 std::size_t JitInterface::DisassembleNearCode(const JitBlock& block, std::ostream& stream) const
 {
   if (m_jit)

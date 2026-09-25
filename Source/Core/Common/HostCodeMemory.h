@@ -7,6 +7,7 @@
 #ifdef __SWITCH__
 
 #include <cstddef>
+#include <utility>
 
 #include "Common/CommonTypes.h"
 
@@ -26,6 +27,9 @@ inline u8* WritableAlias(const u8* ptr)
 bool Init();
 void Shutdown();
 bool IsAvailable();
+
+// The executable mapping of the whole arena.
+std::pair<const u8*, const u8*> GetExecutableRange();
 
 // Both return nullptr / do nothing when the arena is unavailable or exhausted.
 u8* Allocate(std::size_t size);

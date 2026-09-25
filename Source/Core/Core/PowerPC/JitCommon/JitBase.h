@@ -29,6 +29,7 @@
 namespace Core
 {
 class BranchWatch;
+class CPUThreadGuard;
 class System;
 }  // namespace Core
 namespace PowerPC
@@ -225,6 +226,11 @@ public:
   // Memory region name, free size, and fragmentation ratio
   using MemoryStats = std::pair<std::string_view, std::pair<std::size_t, double>>;
   virtual std::vector<MemoryStats> GetMemoryStats() const = 0;
+
+  using CodeRegion = std::pair<std::string_view, std::pair<const u8*, const u8*>>;
+  virtual std::vector<CodeRegion> GetCodeRegions() const { return {}; }
+
+  std::vector<JitCodeBlockRange> GetBlockRanges(const Core::CPUThreadGuard& guard);
 
   virtual std::size_t DisassembleNearCode(const JitBlock& block, std::ostream& stream) const = 0;
   virtual std::size_t DisassembleFarCode(const JitBlock& block, std::ostream& stream) const = 0;

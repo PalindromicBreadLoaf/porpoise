@@ -103,6 +103,14 @@ bool IsAvailable()
   return s_rx != nullptr;
 }
 
+std::pair<const u8*, const u8*> GetExecutableRange()
+{
+  std::lock_guard lock{s_mutex};
+  if (!s_rx)
+    return {nullptr, nullptr};
+  return {s_rx, s_rx + ARENA_SIZE};
+}
+
 u8* Allocate(std::size_t size)
 {
   if (size == 0)

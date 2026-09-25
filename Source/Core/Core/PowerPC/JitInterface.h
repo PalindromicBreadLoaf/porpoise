@@ -19,6 +19,7 @@ class CPUCoreBase;
 class PointerWrap;
 class JitBase;
 struct JitBlock;
+struct JitCodeBlockRange;
 
 namespace Core
 {
@@ -78,6 +79,14 @@ public:
   // Memory region name, free size, and fragmentation ratio
   using MemoryStats = std::pair<std::string_view, std::pair<std::size_t, double>>;
   std::vector<MemoryStats> GetMemoryStats() const;
+
+  // Name and [start, end) of each range of host code the JIT executes from.
+  using CodeRegion = std::pair<std::string_view, std::pair<const u8*, const u8*>>;
+  std::vector<CodeRegion> GetCodeRegions() const;
+
+  // Host code range and originating guest address of every live block, so a sampled program
+  // counter inside the JIT can be traced back to the guest code it came from.
+  std::vector<JitCodeBlockRange> GetBlockRanges(const Core::CPUThreadGuard& guard) const;
 
   // Disassemble the recompiled code from a JIT block. Returns the disassembled instruction count.
   std::size_t DisassembleNearCode(const JitBlock& block, std::ostream& stream) const;
