@@ -8,9 +8,11 @@
 
 #include "Common/Assert.h"
 #include "Common/MsgHandler.h"
+#include "Common/Thread.h"
 
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoCommon/Constants.h"
+#include "VideoCommon/Statistics.h"
 #include "vulkan/vulkan_core.h"
 
 namespace Vulkan
@@ -34,6 +36,8 @@ CommandBufferManager::~CommandBufferManager()
 
 bool CommandBufferManager::Initialize(size_t swapchain_image_count)
 {
+  CreateTimestampPool();
+
   if (!CreateCommandBuffers(swapchain_image_count))
     return false;
 
@@ -150,6 +154,9 @@ void CommandBufferManager::DestroyCommandBuffers()
   {
     vkDestroySemaphore(device, present_semaphore, nullptr);
   }
+
+  if (m_timestamp_pool != VK_NULL_HANDLE)
+    vkDestroyQueryPool(device, m_timestamp_pool, nullptr);
 }
 
 VkDescriptorPool CommandBufferManager::CreateDescriptorPool(u32 max_descriptor_sets)
@@ -297,6 +304,7 @@ void CommandBufferManager::WaitForCommandBufferCompletion(u32 index)
 
     if (cleanup_resources.fence_counter > m_completed_fence_counter)
     {
+      CollectTimestamps(cleanup_index);
       for (auto& it : cleanup_resources.cleanup_resources)
         it();
       cleanup_resources.cleanup_resources.clear();
@@ -315,6 +323,7 @@ void CommandBufferManager::SubmitCommandBuffer(bool submit_on_worker_thread,
 {
   // End the current command buffer.
   CmdBufferResources& resources = GetCurrentCmdBufferResources();
+  WriteEndTimestamp(m_current_cmd_buffer);
   for (VkCommandBuffer command_buffer : resources.command_buffers)
   {
     VkResult res = vkEndCommandBuffer(command_buffer);
@@ -500,6 +509,8 @@ void CommandBufferManager::BeginCommandBuffer()
     if (res != VK_SUCCESS)
       LOG_VULKAN_ERROR(res, "vkBeginCommandBuffer failed: ");
   }
+
+  WriteBeginTimestamp(next_buffer_index);
 
   // Reset upload command buffer state
   resources.init_command_buffer_used = false;

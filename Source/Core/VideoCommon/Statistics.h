@@ -4,7 +4,10 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <vector>
+
+#include "Common/CommonTypes.h"
 
 #include "VideoCommon/BPFunctions.h"
 
@@ -79,8 +82,16 @@ struct Statistics
     int num_draw_done = 0;
     int num_token = 0;
     int num_token_int = 0;
+
+    int num_render_passes = 0;
   };
   ThisFrame this_frame;
+
+  float gpu_frame_time_ms = 0.0f;
+
+  std::atomic<u64> gpu_busy_ns_total{0};
+  std::atomic<u64> presents_total{0};
+
   void ResetFrame();
   void SwapDL();
   void AddScissorRect();

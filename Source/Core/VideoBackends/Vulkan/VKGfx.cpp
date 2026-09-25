@@ -330,6 +330,8 @@ void VKGfx::PresentBackbuffer()
     g_command_buffer_mgr->SubmitCommandBuffer(true, false, true);
   }
 
+  g_command_buffer_mgr->PublishFrameGpuTime();
+
   // New cmdbuffer, so invalidate state.
   StateTracker::GetInstance()->InvalidateCachedState();
 }

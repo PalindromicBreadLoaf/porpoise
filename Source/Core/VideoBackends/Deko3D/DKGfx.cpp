@@ -322,6 +322,7 @@ void DKGfx::PresentBackbuffer()
     g_dk_command_buffer_mgr->SubmitCommandBuffer(false);
 
   m_current_slot = -1;
+  g_dk_command_buffer_mgr->PublishFrameGpuTime();
 
   m_presents++;
   m_presents_reaching_screen += reaches_screen ? 1 : 0;

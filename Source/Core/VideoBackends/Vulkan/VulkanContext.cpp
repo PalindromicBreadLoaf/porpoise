@@ -87,6 +87,8 @@ VulkanContext::PhysicalDeviceInfo::PhysicalDeviceInfo(VkPhysicalDevice device)
   framebufferDepthSampleCounts = properties.limits.framebufferDepthSampleCounts;
   memcpy(pointSizeRange, properties.limits.pointSizeRange, sizeof(pointSizeRange));
   maxSamplerAnisotropy = properties.limits.maxSamplerAnisotropy;
+  timestampPeriod = properties.limits.timestampPeriod;
+  timestampComputeAndGraphics = properties.limits.timestampComputeAndGraphics;
 
   dualSrcBlend = features.dualSrcBlend != VK_FALSE;
   geometryShader = features.geometryShader != VK_FALSE;

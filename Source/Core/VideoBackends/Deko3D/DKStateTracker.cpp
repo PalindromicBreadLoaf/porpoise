@@ -21,6 +21,7 @@
 #include "VideoBackends/Deko3D/DKTexture.h"
 
 #include "VideoCommon/AbstractPipeline.h"
+#include "VideoCommon/Statistics.h"
 #include "VideoCommon/TextureConfig.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -398,6 +399,7 @@ void DKStateTracker::BindFramebuffer()
 
   m_framebuffer->Bind(cmdbuf);
   m_dirty_flags &= ~DIRTY_FLAG_FRAMEBUFFER;
+  g_stats.this_frame.num_render_passes++;
 }
 
 void DKStateTracker::ClearFramebuffer(const DkScissor& area, u32 color_mask,

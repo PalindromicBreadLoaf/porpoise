@@ -38,6 +38,8 @@ public:
     VkSampleCountFlags framebufferDepthSampleCounts;
     float pointSizeRange[2];
     float maxSamplerAnisotropy;
+    float timestampPeriod;
+    bool timestampComputeAndGraphics;
     u32 subgroupSize = 1;
     VkDriverId driverID = static_cast<VkDriverId>(0);
     bool dualSrcBlend;

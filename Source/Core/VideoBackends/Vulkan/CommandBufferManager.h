@@ -81,6 +81,8 @@ public:
                            VkSwapchainKHR present_swap_chain = VK_NULL_HANDLE,
                            uint32_t present_image_index = 0xFFFFFFFF);
 
+  void PublishFrameGpuTime();
+
   // Was the last present submitted to the queue a failure? If so, we must recreate our swapchain.
   bool CheckLastPresentFail() { return m_last_present_failed.TestAndClear(); }
   VkResult GetLastPresentResult() const { return m_last_present_result; }
@@ -104,6 +106,11 @@ private:
                            u32 present_image_index);
   void BeginCommandBuffer();
 
+  bool CreateTimestampPool();
+  void WriteBeginTimestamp(u32 command_buffer_index);
+  void WriteEndTimestamp(u32 command_buffer_index);
+  void CollectTimestamps(u32 command_buffer_index);
+
   VkDescriptorPool CreateDescriptorPool(u32 descriptor_sizes);
 
   const u32 DESCRIPTOR_SETS_PER_POOL = 1024;
@@ -120,6 +127,7 @@ private:
     bool semaphore_used = false;
     std::atomic<bool> waiting_for_submit{false};
     u32 frame_index = 0;
+    bool timestamps_written = false;
 
     std::vector<std::function<void()>> cleanup_resources;
   };

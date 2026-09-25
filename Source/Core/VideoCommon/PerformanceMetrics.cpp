@@ -17,6 +17,7 @@
 #include "Core/HW/Memmap.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
+#include "VideoCommon/Statistics.h"
 #endif
 
 PerformanceMetrics::PerformanceMetrics()
@@ -388,10 +389,17 @@ void PerformanceMetrics::DrawImGuiStats(const float backbuffer_scale)
     const bool software_vertex_loader =
         Config::Get(Config::GFX_VERTEX_LOADER_TYPE) == VertexLoaderType::Software;
 
-    // Determine what we are bound by.
+    const float gpu_ms = g_stats.gpu_frame_time_ms;
+    const int render_passes = g_stats.this_frame.num_render_passes;
+
     const char* bound = "full speed";
     if (speed < 0.95)
-      bound = (vps > 5.0 && fps < 0.75 * vps) ? "GPU/present-bound" : "CPU-bound";
+    {
+      if (gpu_ms <= 0.0f)
+        bound = "unknown (no GPU timing)";
+      else
+        bound = (fps > 1.0 && gpu_ms * fps > 800.0) ? "GPU-bound" : "CPU-bound";
+    }
 
     ImGui::SetNextWindowPos(ImVec2(window_x, window_y), set_next_position_condition,
                             ImVec2(1.0f, 0.0f));
@@ -410,6 +418,11 @@ void PerformanceMetrics::DrawImGuiStats(const float backbuffer_scale)
       ImGui::TextColored(color, "Fastmem:%s  VLoader:%s", fastmem ? " on" : " off",
                          software_vertex_loader ? " software" : " native");
       ImGui::TextColored(color, "Bound: %s", bound);
+      if (gpu_ms > 0.0f)
+        ImGui::TextColored(color, "GPU busy: %.2f ms", gpu_ms);
+      else
+        ImGui::TextColored(color, "GPU busy: n/a");
+      ImGui::TextColored(color, "Render passes: %d", render_passes);
     }
     ImGui::End();
   }

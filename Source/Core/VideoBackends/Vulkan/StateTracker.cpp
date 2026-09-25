@@ -13,6 +13,7 @@
 #include "VideoBackends/Vulkan/VKTexture.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoCommon/Constants.h"
+#include "VideoCommon/Statistics.h"
 
 namespace Vulkan
 {
@@ -285,6 +286,7 @@ void StateTracker::BeginRenderPass()
   if (InRenderPass())
     return;
 
+  g_stats.this_frame.num_render_passes++;
   m_current_render_pass = m_framebuffer->GetLoadRenderPass();
   m_framebuffer_render_area = m_framebuffer->GetRect();
   m_framebuffer->PrepareForRenderPass();
@@ -306,6 +308,7 @@ void StateTracker::BeginDiscardRenderPass()
   if (InRenderPass())
     return;
 
+  g_stats.this_frame.num_render_passes++;
   m_current_render_pass = m_framebuffer->GetDiscardRenderPass();
   m_framebuffer_render_area = m_framebuffer->GetRect();
 
@@ -335,6 +338,7 @@ void StateTracker::BeginClearRenderPass(const VkRect2D& area, const VkClearValue
 {
   ASSERT(!InRenderPass());
 
+  g_stats.this_frame.num_render_passes++;
   m_current_render_pass = m_framebuffer->GetClearRenderPass();
   m_framebuffer_render_area = area;
   m_framebuffer->PrepareForRenderPass();
