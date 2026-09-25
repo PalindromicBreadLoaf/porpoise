@@ -15,6 +15,7 @@
 #include "Common/BitSet.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/ConfigInfo.h"
+#include "Common/HorizonJitStack.h"
 #include "Common/x64Emitter.h"
 #include "Core/CPUThreadConfigCallback.h"
 #include "Core/ConfigManager.h"
@@ -79,6 +80,9 @@ protected:
   static constexpr size_t MIN_STACK_SIZE = SAFE_STACK_SIZE + MIN_UNSAFE_STACK_SIZE;
   static constexpr size_t GUARD_SIZE = 64 * 1024;
   static constexpr size_t GUARD_OFFSET = SAFE_STACK_SIZE - GUARD_SIZE;
+#ifdef __SWITCH__
+  static constexpr size_t JIT_STACK_SIZE = 1024 * 1024;
+#endif
 
   struct JitOptions
   {
@@ -167,6 +171,9 @@ protected:
   bool m_enable_blr_optimization = false;
   bool m_cleanup_after_stackfault = false;
   u8* m_stack_guard = nullptr;
+#ifdef __SWITCH__
+  Common::HorizonJitStack::Stack m_jit_stack;
+#endif
 
   static const std::array<std::pair<bool JitBase::*, const Config::Info<bool>*>, 25> JIT_SETTINGS;
 

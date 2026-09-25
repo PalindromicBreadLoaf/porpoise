@@ -15,6 +15,7 @@
 #include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
 #include "Common/HorizonFastmem.h"
+#include "Common/HorizonJitStack.h"
 #include "Common/HostCodeMemory.h"
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
@@ -124,6 +125,8 @@ void ApplyPlatformConfigOverrides()
   Config::SetCurrent(Config::MAIN_PAGE_TABLE_FASTMEM,
                      fastmem_arena && Common::HorizonFastmem::AreReadOnlyMappingsSupported());
 
+  Common::HorizonJitStack::GetGuardSource();
+
   // TegraX1 lacks the shader throughput for ubershaders.
   // TODO: expose the skip-until-compiled tradeoff as a user-visible setting once a settings UI
   // exists.
@@ -225,6 +228,8 @@ int main(int argc, char* argv[])
   Common::ScopeGuard ui_common_guard([] { UICommon::Shutdown(); });
 
   LogHostEnvironment();
+
+  Common::SetCurrentThreadName("Host thread");
 
   // The frontend/applet loop shares a core with audio and the background workers.
   Common::PinCurrentThreadToRole(Common::ThreadCoreRole::Host);

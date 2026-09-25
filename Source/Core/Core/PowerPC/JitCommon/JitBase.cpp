@@ -111,6 +111,9 @@ JitBase::JitBase(Core::System& system)
 JitBase::~JitBase()
 {
   CPUThreadConfigCallback::RemoveConfigChangedCallback(m_registered_config_callback_id);
+#ifdef __SWITCH__
+  Common::HorizonJitStack::Release(m_jit_stack);
+#endif
 }
 
 bool JitBase::DoesConfigNeedRefresh() const
@@ -170,6 +173,14 @@ void JitBase::InitBLROptimization()
   m_enable_blr_optimization =
       jo.enableBlocklink && !IsDebuggingEnabled() && EMM::IsExceptionHandlerSupported();
   m_cleanup_after_stackfault = false;
+
+#ifdef __SWITCH__
+  if (m_enable_blr_optimization && !m_jit_stack)
+  {
+    m_jit_stack = Common::HorizonJitStack::Allocate(JIT_STACK_SIZE, GUARD_OFFSET, GUARD_SIZE);
+    m_enable_blr_optimization = static_cast<bool>(m_jit_stack);
+  }
+#endif
 }
 
 void JitBase::ProtectStack()
@@ -177,7 +188,15 @@ void JitBase::ProtectStack()
   if (!m_enable_blr_optimization)
     return;
 
-#ifdef _WIN32
+#if defined(__SWITCH__)
+  if (!Common::HorizonJitStack::Arm(m_jit_stack))
+  {
+    m_enable_blr_optimization = false;
+    return;
+  }
+
+  m_stack_guard = m_jit_stack.guard;
+#elif defined(_WIN32)
   ULONG reserveSize = SAFE_STACK_SIZE;
   if (!SetThreadStackGuarantee(&reserveSize))
   {
@@ -233,7 +252,13 @@ void JitBase::ProtectStack()
 
 void JitBase::UnprotectStack()
 {
-#ifndef _WIN32
+#if defined(__SWITCH__)
+  if (m_stack_guard)
+  {
+    Common::HorizonJitStack::Disarm(m_jit_stack);
+    m_stack_guard = nullptr;
+  }
+#elif !defined(_WIN32)
   if (m_stack_guard)
   {
     Common::UnWriteProtectMemory(m_stack_guard, GUARD_SIZE);

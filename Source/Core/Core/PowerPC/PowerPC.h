@@ -125,6 +125,10 @@ struct PowerPCState
   // Storage for the stack pointer of the BLR optimization.
   u8* stored_stack_pointer = nullptr;
 
+#ifdef __SWITCH__
+  u8* host_stack_pointer = nullptr;
+#endif
+
   // gather pipe pointer for JIT access
   u8* gather_pipe_ptr = nullptr;
   u8* gather_pipe_base_ptr = nullptr;

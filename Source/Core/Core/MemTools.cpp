@@ -15,6 +15,8 @@
 
 #ifdef __SWITCH__
 #include <atomic>
+
+#include "Common/HorizonJitStack.h"
 #endif
 
 #if defined(__FreeBSD__) || defined(__NetBSD__)
@@ -275,9 +277,6 @@ extern "C" bool HorizonExceptionDispatch(SContext* ctx);
 
 extern "C" bool HorizonExceptionDispatch(SContext* ctx)
 {
-  if (!s_handler_installed.load(std::memory_order_acquire))
-    return false;
-
   if (!threadExceptionIsAArch64(ctx))
     return false;
 
@@ -285,11 +284,20 @@ extern "C" bool HorizonExceptionDispatch(SContext* ctx)
   if (exception_class != ESR_EC_DATA_ABORT_LOWER && exception_class != ESR_EC_DATA_ABORT_SAME)
     return false;
 
-  // Faults outside the arena are real crashes.
-  auto& system = Core::System::GetInstance();
   const auto fault_address = static_cast<uintptr_t>(ctx->far.x);
-  if (!system.GetMemory().IsAddressInFastmemArea(reinterpret_cast<u8*>(fault_address)))
+
+  if (Common::HorizonJitStack::HandleProbeFault(fault_address, ctx->pc.x))
+    return true;
+
+  if (!s_handler_installed.load(std::memory_order_acquire))
     return false;
+
+  auto& system = Core::System::GetInstance();
+  if (!system.GetMemory().IsAddressInFastmemArea(reinterpret_cast<u8*>(fault_address)) &&
+      !Common::HorizonJitStack::IsGuardAddress(fault_address))
+  {
+    return false;
+  }
 
   return system.GetJitInterface().HandleFault(fault_address, ctx);
 }
