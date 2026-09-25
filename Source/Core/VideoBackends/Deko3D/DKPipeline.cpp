@@ -311,7 +311,8 @@ std::unique_ptr<DKPipeline> DKPipeline::Create(const AbstractPipelineConfig& con
   std::vector<u32> storage(MAX_CAPTURE_WORDS);
   dkCmdBufBeginCaptureCmds(scratch, storage.data(), static_cast<u32>(storage.size()));
 
-  dkCmdBufBindShaders(scratch, stage_mask, shaders.data(), static_cast<u32>(shaders.size()));
+  dkCmdBufBindShaders(scratch, DkStageFlag_GraphicsMask, shaders.data(),
+                      static_cast<u32>(shaders.size()));
   dkCmdBufBindRasterizerState(scratch, &raster);
   dkCmdBufBindMultisampleState(scratch, &multisample);
   dkCmdBufBindColorState(scratch, &color);
