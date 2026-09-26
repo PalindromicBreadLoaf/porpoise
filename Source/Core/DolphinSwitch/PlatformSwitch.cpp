@@ -72,8 +72,8 @@ void PlatformSwitch::PollHostInput(Core::System& system)
     PerfOverlay::CycleLevel();
   m_overlay_chord_latched = overlay_held;
 
-  constexpr u64 profile_chord = HidNpadButton_Minus | HidNpadButton_StickL;
-  const bool profile_held = (buttons & profile_chord) == profile_chord;
+  const bool profile_held =
+      (buttons & (HidNpadButton_Minus | HidNpadButton_Plus)) == HidNpadButton_Minus;
   if (profile_held && !m_profile_chord_latched)
     Core::HorizonSampler::Toggle(system, PROFILE_CAPTURE_SECONDS);
   m_profile_chord_latched = profile_held;
