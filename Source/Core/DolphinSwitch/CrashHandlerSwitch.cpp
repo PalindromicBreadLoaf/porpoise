@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "Common/CommonPaths.h"
+#include "Common/HorizonBuildId.h"
 #include "DolphinSwitch/HorizonExceptionEntry.h"
 
 // The entry stub fills the slot by hand.
@@ -231,6 +232,7 @@ extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx)
 
   const u64 module_base = reinterpret_cast<u64>(&_start);
   const u64 module_end = reinterpret_cast<u64>(__end__);
+  out.Printf("build id %s\n", Common::HorizonBuildId::GetHex().data());
   out.Printf("module base %016lx\n", module_base);
   if (ctx->pc.x >= module_base && ctx->pc.x < module_end)
   {
@@ -285,9 +287,9 @@ extern "C" void abort()
   if (caller >= module_base)
     out.Printf("abort called from +%lx  (aarch64-none-elf-addr2line -e porpoise.elf)\n",
                caller - module_base);
+  out.Printf("build id %s\n", Common::HorizonBuildId::GetHex().data());
   out.Printf("module base %016lx\n", module_base);
-  out.Printf("The break below is what the crash report describes. Its crashed thread is the one "
-             "that aborted, and its stack trace is where the reason is.\n");
+  out.Printf("The break below is what the crash report describes.\n");
 
   if (fd >= 0)
   {

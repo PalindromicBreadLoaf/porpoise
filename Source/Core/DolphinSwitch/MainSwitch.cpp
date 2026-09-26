@@ -14,6 +14,7 @@
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
+#include "Common/HorizonBuildId.h"
 #include "Common/HorizonFastmem.h"
 #include "Common/HorizonJitStack.h"
 #include "Common/HostCodeMemory.h"
@@ -76,7 +77,8 @@ void LogHostEnvironment()
   svcGetInfo(&total_memory, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
   svcGetInfo(&used_memory, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0);
 
-  NOTICE_LOG_FMT(COMMON, "porpoise {}", Common::GetScmDescStr());
+  NOTICE_LOG_FMT(COMMON, "porpoise {}, build id {}", Common::GetScmDescStr(),
+                 Common::HorizonBuildId::GetHex().data());
   NOTICE_LOG_FMT(COMMON, "Applet type {}, core mask {:#06b}, heap {} MiB used of {} MiB",
                  static_cast<int>(appletGetAppletType()), core_mask, used_memory / 0x100000,
                  total_memory / 0x100000);

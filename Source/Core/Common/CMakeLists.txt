@@ -241,6 +241,7 @@ endif()
 
 if(PORPOISE)
   target_sources(common PRIVATE
+    HorizonBuildId.h
     HorizonFastmem.h
     HorizonJitStack.cpp
     HorizonJitStack.h

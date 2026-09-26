@@ -28,6 +28,7 @@
 
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
+#include "Common/HorizonBuildId.h"
 #include "Common/HorizonJitStack.h"
 #include "Common/HorizonThreadRegistry.h"
 #include "Common/HostCodeMemory.h"
@@ -683,6 +684,7 @@ void AppendSummary(std::string& out, const std::vector<std::size_t>& order,
                      "{} dropped\n",
                      s_capture.elapsed, s_capture.rounds, SAMPLE_PERIOD_NS / 1'000'000,
                      s_capture.sample_count, s_capture.dropped_samples);
+  out += fmt::format("build id {}\n", Common::HorizonBuildId::GetHex().data());
   out += fmt::format("module base {} size {:#x}\n",
                      fmt::ptr(reinterpret_cast<const void*>(s_capture.module_start)),
                      s_capture.module_end - s_capture.module_start);
