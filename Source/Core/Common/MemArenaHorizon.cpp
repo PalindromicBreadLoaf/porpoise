@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 
@@ -24,6 +25,23 @@ namespace
 {
 constexpr size_t HORIZON_PAGE_SIZE = 0x1000;
 
+constexpr size_t LARGE_PAGE_SIZE = 0x200000;
+
+::VirtmemReservation* ReserveAligned(void* (*find)(size_t, size_t), size_t size, size_t guard_size,
+                                     u8** out)
+{
+  u8* const found = static_cast<u8*>(find(size + LARGE_PAGE_SIZE, guard_size));
+  if (!found)
+    return nullptr;
+
+  u8* const aligned =
+      reinterpret_cast<u8*>(AlignUp(reinterpret_cast<uintptr_t>(found), LARGE_PAGE_SIZE));
+  ::VirtmemReservation* const reservation = virtmemAddReservation(aligned, size);
+  if (reservation)
+    *out = aligned;
+  return reservation;
+}
+
 // Horizon tracks a state per memory block and only lets one of them be aliased into more than one
 // address range.
 struct AliasableSegment
@@ -38,17 +56,17 @@ bool CreateAliasableSegment(AliasableSegment& segment, size_t size)
 {
   const Handle self = envGetOwnProcessHandle();
 
-  void* const backing = std::aligned_alloc(HORIZON_PAGE_SIZE, size);
+  void* const backing = std::aligned_alloc(LARGE_PAGE_SIZE, size);
   if (!backing)
   {
     WARN_LOG_FMT(MEMMAP, "Failed to allocate {} bytes to back the guest memory segment.", size);
     return false;
   }
 
+  u8* canonical = nullptr;
   virtmemLock();
-  void* const canonical = virtmemFindCodeMemory(size, HORIZON_PAGE_SIZE);
   ::VirtmemReservation* const reservation =
-      canonical ? virtmemAddReservation(canonical, size) : nullptr;
+      ReserveAligned(virtmemFindCodeMemory, size, HORIZON_PAGE_SIZE, &canonical);
   virtmemUnlock();
 
   if (!reservation)
@@ -89,7 +107,7 @@ bool CreateAliasableSegment(AliasableSegment& segment, size_t size)
   }
 
   segment.backing = backing;
-  segment.canonical = static_cast<u8*>(canonical);
+  segment.canonical = canonical;
   segment.reservation = reservation;
   segment.size = size;
   return true;
@@ -319,10 +337,10 @@ u8* MemArena::ReserveMemoryRegion(size_t memory_size)
 
   // Libnx bookkeeping for data aborts to keep other allocations out of the window.
   const size_t aligned_size = AlignUp(memory_size, HORIZON_PAGE_SIZE);
+  u8* base = nullptr;
   virtmemLock();
-  u8* const base = static_cast<u8*>(virtmemFindAslr(aligned_size, 0));
   ::VirtmemReservation* const reservation =
-      base ? virtmemAddReservation(base, aligned_size) : nullptr;
+      ReserveAligned(virtmemFindAslr, aligned_size, 0, &base);
   virtmemUnlock();
 
   if (!reservation)
